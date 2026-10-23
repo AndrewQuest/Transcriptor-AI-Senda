@@ -1,0 +1,30 @@
+{
+  "app-id": "io.github.AndrewQuest.Senda",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "senda",
+  "finish-args": ["--socket=wayland", "--socket=fallback-x11", "--share=ipc", "--socket=pulseaudio", "--share=network", "--talk-name=org.a11y.Bus"],
+  "build-options": {"prepend-path": "/usr/lib/sdk/rust-stable/bin", "env": {"CARGO_HOME": "/run/build/senda/cargo-home"}},
+  "modules": [{
+    "name": "senda",
+    "buildsystem": "simple",
+    "build-commands": [
+      "mkdir -p .cargo && printf '[source.crates-io]\nreplace-with=\"vendored-sources\"\n[source.vendored-sources]\ndirectory=\"/run/build/senda/cargo-vendor\"\n' > .cargo/config.toml",
+      "cargo build --release --offline --locked --manifest-path linux/Cargo.toml",
+      "install -Dm755 linux/target/release/senda-linux /app/bin/senda",
+      "mkdir -p /app/lib/senda && cp -a worker /app/lib/senda/worker && chmod +x /app/lib/senda/worker/Senda.Worker",
+      "install -Dm644 packaging/flatpak/io.github.AndrewQuest.Senda.desktop /app/share/applications/io.github.AndrewQuest.Senda.desktop",
+      "install -Dm644 packaging/flatpak/io.github.AndrewQuest.Senda.metainfo.xml /app/share/metainfo/io.github.AndrewQuest.Senda.metainfo.xml",
+      "install -Dm644 packaging/flatpak/io.github.AndrewQuest.Senda.svg /app/share/icons/hicolor/scalable/apps/io.github.AndrewQuest.Senda.svg",
+      "mkdir -p /app/share/licenses/senda && cp -a licenses/. /app/share/licenses/senda/ && cp THIRD-PARTY-NOTICES.md /app/share/licenses/senda/",
+      "python3 scripts/collect-rust-licenses.py --vendor cargo-vendor --output /app/share/licenses/senda/rust"
+    ],
+    "sources": [
+      {"type": "dir", "path": "../..", "skip": [".git", ".flatpak-builder", "artifacts", "whistle", "linux/target", "**/bin", "**/obj"]},
+      {"type": "dir", "path": "../../artifacts/publish/linux-worker", "dest": "worker"},
+      {"type": "dir", "path": "../../artifacts/cargo-vendor", "dest": "cargo-vendor"}
+    ]
+  }]
+}

@@ -1,0 +1,111 @@
+name: Linux Flatpak preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['linux-v*']
+    paths: ['linux/**', 'packaging/**', 'src/Transcriptor.Core/**', 'src/Transcriptor.Inference/**', 'src/Transcriptor.Worker/**', 'scripts/linux-worker-smoke.py', 'scripts/collect-rust-licenses.py', '.github/workflows/linux-flatpak.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reserve space on the disposable GitHub runner
+        run: |
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          # These preinstalled SDKs are unused by this job, on its ephemeral runner only.
+          sudo rm -rf -- /usr/local/lib/android /opt/ghc
+          df -h .
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            linux/target
+          key: linux-native-${{ runner.os }}-${{ hashFiles('linux/Cargo.lock', 'linux/rust-toolchain.toml') }}
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev pkg-config xvfb xdotool dbus-x11 flatpak flatpak-builder
+          rustup toolchain install 1.99.1 --profile minimal
+      - name: Test native frontend and publish local worker
+        run: |
+          cargo +1.99.1 test --locked --manifest-path linux/Cargo.toml
+          cargo +1.99.1 build --release --locked --manifest-path linux/Cargo.toml
+          dotnet restore src/Transcriptor.Worker/Transcriptor.Worker.csproj --locked-mode
+          dotnet publish src/Transcriptor.Worker/Transcriptor.Worker.csproj -c Release -r linux-x64 --self-contained true --no-restore -o artifacts/publish/linux-worker
+          mkdir -p artifacts/linux-smoke
+          python3 scripts/linux-worker-smoke.py --worker artifacts/publish/linux-worker/Senda.Worker --protocol-only --output artifacts/linux-smoke/worker-protocol.json
+      - name: Check native window startup
+        run: |
+          mkdir -p artifacts/linux-smoke
+          dbus-run-session -- xvfb-run -a bash -c '
+            export XDG_DATA_HOME="$PWD/artifacts/linux-smoke/data" XDG_CONFIG_HOME="$PWD/artifacts/linux-smoke/config"
+            export SENDA_WORKER="$PWD/artifacts/publish/linux-worker/Senda.Worker"
+            linux/target/release/senda-linux > artifacts/linux-smoke/startup.log 2>&1 & app_pid=$!
+            for attempt in $(seq 1 30); do
+              if xdotool search --name "Senda" > artifacts/linux-smoke/windows.txt 2>/dev/null; then break; fi
+              kill -0 "$app_pid" || { cat artifacts/linux-smoke/startup.log; exit 1; }
+              sleep 1
+            done
+            test -s artifacts/linux-smoke/windows.txt
+            sleep 2
+            kill -0 "$app_pid"
+            if grep -q "panicked at" artifacts/linux-smoke/startup.log; then cat artifacts/linux-smoke/startup.log; exit 1; fi
+            kill "$app_pid"
+          '
+      - name: Vendor Rust dependencies for sandboxed build
+        run: cargo +1.99.1 vendor --locked --manifest-path linux/Cargo.toml artifacts/cargo-vendor
+      - name: Prepare Flatpak SDK
+        run: |
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y flathub org.gnome.Platform//50 org.gnome.Sdk//50 org.freedesktop.Sdk.Extension.rust-stable//25.08
+      - name: Build Flatpak without network access to the compiler sandbox
+        run: |
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --state-dir=artifacts/flatpak-state --repo=artifacts/flatpak-repo artifacts/flatpak-build packaging/flatpak/io.github.AndrewQuest.Senda.json
+          flatpak build-bundle artifacts/flatpak-repo artifacts/Senda-0.3.0-alpha.1-Linux-x64.flatpak io.github.AndrewQuest.Senda
+          cd artifacts
+          sha256sum Senda-0.3.0-alpha.1-Linux-x64.flatpak > Senda-Linux-SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Senda-Linux-build-logs
+          path: artifacts/linux-smoke/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Senda-Linux-Flatpak
+          path: |
+            artifacts/*.flatpak
+            artifacts/Senda-Linux-SHA256SUMS.txt
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/linux-v')
+    needs: linux
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Senda-Linux-Flatpak
+          path: artifacts/linux-release
+      - name: Publish experimental Flatpak and hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_TAG: ${{ github.ref_name }}
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("linux/Cargo.toml", "rb"))["package"]["version"])')
+          test "$GH_TAG" = "linux-v$version"
+          gh release create "$GH_TAG" artifacts/linux-release/* --verify-tag --prerelease --title "Senda $version — Linux experimental" --notes-file "docs/releases/$GH_TAG.md"

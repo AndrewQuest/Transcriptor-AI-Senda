@@ -1,0 +1,17 @@
+{
+  "virtualbox": {
+    "file": "VirtualBox-7.2.22-175245-Win.exe",
+    "url": "https://download.oracle.com/virtualbox/7.2.22/VirtualBox-7.2.22-175245-Win.exe",
+    "sha256": "afd0ff1656cbe04ed88ce619594ae021419d97cce89fa9bdc443e9a963f1713f"
+  },
+  "gnome": {
+    "file": "ubuntu-26.04.1-desktop-amd64.iso",
+    "url": "https://releases.ubuntu.com/26.04.1/ubuntu-26.04.1-desktop-amd64.iso",
+    "sha256": "601e30fbf5d97759367c632e2c33630665039b7e2158fd068403da3ccf1bda1f"
+  },
+  "kde": {
+    "file": "kubuntu-26.04.1-desktop-amd64.iso",
+    "url": "https://cdimage.ubuntu.com/kubuntu/releases/26.04.1/release/kubuntu-26.04.1-desktop-amd64.iso",
+    "sha256": "831e4d4bb85098339ba43d3502cd6619b27e76daf37246a084cd68a6413090b8"
+  }
+}
