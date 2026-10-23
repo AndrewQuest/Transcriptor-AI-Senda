@@ -1,0 +1,21 @@
+Senda 0.2.0 — Windows x64
+
+Descomprime toda la carpeta y abre Senda.exe. Conserva las DLL y las carpetas junto al ejecutable.
+
+En Ajustes, descarga el modelo recomendado o importa un modelo Whisper GGML .bin. La descarga necesita Internet; el dictado posterior funciona sin conexión. Si Windows indica que falta el motor nativo, instala Microsoft Visual C++ Redistributable 2015–2022 x64 desde la web de Microsoft.
+
+Haz clic en un campo de texto. Mantén Ctrl + Alt + Espacio, habla y suelta para transcribir y pegar. Esc cancela. El primer dictado carga el modelo y puede tardar más.
+
+Abre Senda desde su icono de bandeja para copiar o corregir el texto. Si cambiaste de ventana o el pegado fue bloqueado, el resultado sigue disponible allí. El reemplazo de una corrección solo se permite cuando se puede comprobar que el texto original permanece intacto.
+
+Cerrar la ventana deja la aplicación activa en la bandeja. Para terminarla, usa Salir en el menú del icono.
+
+Senda abre en modo oscuro. En Ajustes puedes elegir Oscuro, Claro o Usar tema de Windows, activar o desactivar Cristal y transparencias y pulsar Guardar ajustes. La preferencia se conserva al reiniciar.
+
+En Ajustes puedes cambiar Idioma de la interfaz a English y guardar; el idioma del dictado se elige por separado. Para usar tu propio atajo, elige Personalizado en el selector del atajo, pulsa Grabar atajo, presiona y suelta tu combinación y guarda. Las dos combinaciones predeterminadas siguen disponibles.
+
+English: Open Senda.exe with all its DLLs and folders. In Ajustes, set Idioma de la interfaz to English and select Guardar ajustes. Download a speech model in Settings. Hold Ctrl + Alt + Space to record and release it to transcribe and paste. Esc cancels. Choose Custom in the shortcut selector, record a combination and save to use your own shortcut. Closing the window keeps Senda running; use Exit in its system tray menu to quit.
+
+El audio se procesa en RAM y se descarta. El historial local se puede borrar o desactivar desde la aplicación. Los datos personales se guardan en %LOCALAPPDATA%\Senda.
+
+La versión actual usa Whisper para el dictado. Cactus Whistle todavía no está integrado. Consulta docs/validation-status.md en el repositorio para conocer las comprobaciones realizadas y las pendientes.
