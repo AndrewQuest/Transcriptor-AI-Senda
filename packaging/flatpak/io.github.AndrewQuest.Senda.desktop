@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Senda
+Comment=Local voice dictation
+Comment[es]=Dictado de voz local
+Exec=senda
+Icon=io.github.AndrewQuest.Senda
+Terminal=false
+Type=Application
+Categories=Utility;Accessibility;
+Keywords=Dictation;Speech;Whisper;
+StartupNotify=true

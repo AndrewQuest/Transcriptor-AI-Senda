@@ -1,0 +1,33 @@
+<Window x:Class="Transcriptor.App.Views.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource {x:Type Window}}"
+        Title="{DynamicResource 'Senda — Estado del dictado'}" Width="396" Height="124" WindowStyle="None" ResizeMode="NoResize"
+        AllowsTransparency="True" Background="Transparent" Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False">
+  <Grid>
+  <Grid x:Name="Bubble" Margin="22,18,22,36" IsHitTestVisible="False">
+    <Grid.RenderTransform><TranslateTransform x:Name="BubbleOffset" /></Grid.RenderTransform>
+    <!-- Only the static shell owns the shadow; microphone level changes do not redraw its effect. -->
+    <Grid CacheMode="BitmapCache">
+      <Grid.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Color="Black" Opacity="0.6" RenderingBias="Quality" /></Grid.Effect>
+      <Border x:Name="Chrome" CornerRadius="23" Background="{DynamicResource OverlaySurface}" BorderThickness="0">
+        <Border.Effect><BlurEffect Radius="3" RenderingBias="Quality" /></Border.Effect>
+      </Border>
+    </Grid>
+    <Grid Margin="18,11">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="29" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+      <StackPanel x:Name="Bars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Height="30">
+        <Border Width="3" Height="9" Background="{DynamicResource Accent}" CornerRadius="2" Margin="1" VerticalAlignment="Center" />
+        <Border Width="3" Height="20" Background="{DynamicResource Accent}" CornerRadius="2" Margin="1" VerticalAlignment="Center" />
+        <Border Width="3" Height="14" Background="{DynamicResource Accent}" CornerRadius="2" Margin="1" VerticalAlignment="Center" />
+        <Border Width="3" Height="24" Background="{DynamicResource Accent}" CornerRadius="2" Margin="1" VerticalAlignment="Center" />
+        <Border Width="3" Height="10" Background="{DynamicResource Accent}" CornerRadius="2" Margin="1" VerticalAlignment="Center" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+        <TextBlock x:Name="StateText" Text="{DynamicResource 'Te escucho…'}" Foreground="{DynamicResource OverlayInk}" FontWeight="SemiBold" FontSize="13" />
+        <TextBlock x:Name="HintText" Text="{DynamicResource 'Suelta el atajo para insertar · Esc cancela'}" Foreground="{DynamicResource OverlayMuted}" FontSize="10.5" Margin="0,4,0,0" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+  </Grid>
+</Window>

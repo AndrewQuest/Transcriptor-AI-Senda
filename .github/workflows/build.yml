@@ -1,0 +1,88 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore tests/Transcriptor.Tests/Transcriptor.Tests.csproj --locked-mode
+      - run: dotnet test tests/Transcriptor.Tests/Transcriptor.Tests.csproj -c Release --no-restore
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build, test and publish
+        run: ./scripts/publish.ps1
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: Senda-Windows-x64
+          path: artifacts/publish/win-x64/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $compiler = ./scripts/install-inno.ps1
+          ./scripts/build-installer.ps1 -CompilerPath $compiler
+      - name: Test installed application and uninstall
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1
+          ./scripts/test-installer.ps1 -InstallerPath $installer.FullName
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Senda-Installer-Windows-x64
+          path: artifacts/installer/*.exe
+          if-no-files-found: error
+          retention-days: 30
+      - name: Package versioned downloads and checksums
+        id: package
+        run: |
+          $directory = ./scripts/package-release.ps1
+          "directory=$directory" >> $env:GITHUB_OUTPUT
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Senda-Release-assets
+          path: ${{ steps.package.outputs.directory }}/*
+          if-no-files-found: error
+          retention-days: 90
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [core, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Senda-Release-assets
+          path: release-assets
+      - name: Verify tag and publish preview release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import json; print(json.load(open("release-assets/build-info.json"))["version"])')
+          test "$RELEASE_TAG" = "v$version"
+          (cd release-assets && sha256sum --check SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" release-assets/* --verify-tag --title "Senda $version — Windows preview" --notes-file "docs/releases/$RELEASE_TAG.md" --prerelease

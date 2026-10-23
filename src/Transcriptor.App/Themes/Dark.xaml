@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <SolidColorBrush x:Key="Ink" Color="#E8EDF5" />
+  <SolidColorBrush x:Key="Muted" Color="#A6B3C6" />
+  <SolidColorBrush x:Key="Subtle" Color="#8292A8" />
+  <SolidColorBrush x:Key="Paper" Color="#101722" />
+  <SolidColorBrush x:Key="Sidebar" Color="#66151E2B" />
+  <SolidColorBrush x:Key="Surface" Color="#202B3B" />
+  <SolidColorBrush x:Key="SurfaceRaised" Color="#293649" />
+  <SolidColorBrush x:Key="Input" Color="#172130" />
+  <SolidColorBrush x:Key="Line" Color="#334357" />
+  <SolidColorBrush x:Key="Accent" Color="#F2B391" />
+  <SolidColorBrush x:Key="AccentInk" Color="#271B17" />
+  <SolidColorBrush x:Key="AccentSoft" Color="#26F2B391" />
+  <SolidColorBrush x:Key="Positive" Color="#A8D4C5" />
+  <SolidColorBrush x:Key="PositiveSoft" Color="#1FA8D4C5" />
+  <SolidColorBrush x:Key="Selection" Color="#374457" />
+  <SolidColorBrush x:Key="Hover" Color="#303D50" />
+  <SolidColorBrush x:Key="WindowTint" Color="#D9101722" />
+  <SolidColorBrush x:Key="GlassSurface" Color="#C4202B3B" />
+  <SolidColorBrush x:Key="OverlaySurface" Color="#B0202024" />
+  <SolidColorBrush x:Key="OverlayInk" Color="#FAFAFC" />
+  <SolidColorBrush x:Key="OverlayMuted" Color="#F0F0F2" />
+  <LinearGradientBrush x:Key="GlassEdge" StartPoint="0,0" EndPoint="0.8,1">
+    <GradientStop Color="#637E95B2" Offset="0" /><GradientStop Color="#263D516B" Offset="0.45" /><GradientStop Color="#4D6C7B90" Offset="1" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="HeroSurface" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Color="#D1324155" Offset="0" /><GradientStop Color="#D11C293B" Offset="0.55" /><GradientStop Color="#D12B3040" Offset="1" />
+  </LinearGradientBrush>
+</ResourceDictionary>

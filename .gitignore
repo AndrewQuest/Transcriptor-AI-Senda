@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+TestResults/
+artifacts/
+linux/target/
+models/
+/whistle/
+*.bin
+*.gguf
+*.safetensors
+*.onnx
+*.zip
+*.user

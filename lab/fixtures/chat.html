@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Senda — chat local de pruebas</title>
+<meta name="viewport" content="width=device-width">
+<style>
+  :root { color-scheme: dark light; font: 18px system-ui, sans-serif; }
+  body { max-width: 44rem; margin: 3rem auto; padding: 1rem; }
+  label, input { display: block; margin-block: .75rem; }
+  input { box-sizing: border-box; width: 100%; padding: .8rem; font: inherit; }
+  button { font: inherit; padding: .65rem 1.2rem; }
+  li { white-space: pre-wrap; padding-block: .5rem; }
+</style>
+<h1>Chat local de pruebas</h1>
+<p>Este formulario funciona como archivo local o en localhost. No usa servicios externos ni envía mensajes a otras personas.</p>
+<form id="chat">
+  <label for="message">Mensaje / Message</label>
+  <input id="message" autofocus autocomplete="off" aria-label="Mensaje de prueba">
+  <label for="other">Segundo campo para comprobar cambios de foco</label>
+  <input id="other" autocomplete="off" aria-label="Segundo campo de prueba">
+  <button>Enviar al registro local</button>
+</form>
+<p role="status">Envíos locales: <output id="count">0</output></p>
+<ol id="messages"></ol>
+<script>
+  const form = document.querySelector('#chat');
+  const input = document.querySelector('#message');
+  const count = document.querySelector('#count');
+  const messages = document.querySelector('#messages');
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const item = document.createElement('li');
+    item.textContent = input.value;
+    messages.append(item);
+    count.value = String(messages.children.length);
+    input.value = '';
+    input.focus();
+  });
+</script>
+</html>

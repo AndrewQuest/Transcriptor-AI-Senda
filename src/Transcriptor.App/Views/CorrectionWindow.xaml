@@ -1,0 +1,12 @@
+<Window x:Class="Transcriptor.App.Views.CorrectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource {x:Type Window}}"
+        Title="{DynamicResource 'Corregir dictado — Senda'}" Width="640" Height="420" MinWidth="510" MinHeight="340" WindowStartupLocation="CenterScreen" ShowInTaskbar="False">
+  <Grid Margin="28"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+    <TextBlock Text="{DynamicResource 'Dale el último toque.'}" FontSize="25" FontWeight="SemiBold" Margin="0,0,0,20" />
+    <TextBox x:Name="Editor" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" />
+    <TextBlock x:Name="Feedback" Grid.Row="2" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,16" Text="{DynamicResource 'Reemplazar funciona cuando la aplicación original permite comprobar que el texto sigue intacto.'}" />
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="{DynamicResource 'Copiar'}" Click="CopyClicked" Margin="0,0,10,0" /><Button x:Name="ReplaceButton" Content="{DynamicResource 'Reemplazar inserción'}" Style="{StaticResource PrimaryButton}" Click="ReplaceClicked" /></StackPanel>
+  </Grid>
+</Window>
