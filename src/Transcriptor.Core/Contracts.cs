@@ -1,6 +1,6 @@
 namespace Transcriptor.Core;
 
-public enum DictationState { Idle, Recording, Transcribing, Completed, Cancelled, Error }
+public enum DictationState { Idle, Recording, Transcribing, Completed, Cancelled, Error, Starting }
 
 public sealed record AudioClip(byte[] WaveData, TimeSpan Duration, float Peak);
 public sealed record Transcript(string Text, TimeSpan AudioDuration, TimeSpan ProcessingDuration, string Engine)
@@ -27,12 +27,14 @@ public sealed record AppSettings
 {
     public string Language { get; init; } = "auto";
     public string ModelPath { get; init; } = "";
+    public string DownloadModelFile { get; init; } = "";
     public string Hotkey { get; init; } = HotkeyGesture.Default.ToString();
     public bool SaveHistory { get; init; } = true;
     public int HistoryRetentionDays { get; init; } = 30;
     public int UnloadAfterMinutes { get; init; } = 5;
     public int CpuThreads { get; init; } = Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
     public int MicrophoneIndex { get; init; } = -1;
+    public string MicrophoneName { get; init; } = "";
     public bool LaunchAtLogin { get; init; }
     public string Theme { get; init; } = "dark";
     public bool UseGlassEffects { get; init; } = true;

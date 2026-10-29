@@ -10,12 +10,12 @@ Funciona con CPU, sin GPU dedicada. La aceleración Vulkan es opcional. El audio
 
 | Sistema | Versión disponible | Descarga |
 | --- | --- | --- |
-| **Windows 11 x64** | **0.2.1 · preliminar** | [Instalador EXE recomendado](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.1/Senda-Setup-0.2.1-win-x64.exe) · [Página de la versión](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/v0.2.1) |
-| Windows 11 x64, portable | 0.2.1 | [ZIP portable](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.1/Senda-0.2.1-Windows-x64.zip) |
+| **Windows 11 x64** | **0.2.3 · preliminar** | [Instalador EXE recomendado](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.3/Senda-Setup-0.2.3-win-x64.exe) · [Página de la versión](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/v0.2.3) |
+| Windows 11 x64, portable | 0.2.3 | [ZIP portable](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.3/Senda-0.2.3-Windows-x64.zip) |
 | Linux x64 | 0.3.0-alpha.1 · experimental | [Flatpak y hashes](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/linux-v0.3.0-alpha.1) |
 | macOS | Pendiente | Todavía no hay paquete |
 
-Las versiones se numeran por plataforma: para Windows descarga **0.2.1**. En la página de cada versión, abre **Assets** y selecciona el archivo indicado; los ZIP **Source code** contienen el código fuente.
+Las versiones se numeran por plataforma: para Windows descarga **0.2.3**. En la página de cada versión, abre **Assets** y selecciona el archivo indicado; los ZIP **Source code** contienen el código fuente.
 
 Cada release incluye hashes SHA-256. Los artefactos de **Actions** son builds de desarrollo con caducidad; para instalar, utiliza las descargas de **Releases**.
 
@@ -31,7 +31,7 @@ Cada release incluye hashes SHA-256. Los artefactos de **Actions** son builds de
 
 ### Instalación recomendada
 
-1. Descarga **`Senda-Setup-0.2.1-win-x64.exe`**.
+1. Descarga **`Senda-Setup-0.2.3-win-x64.exe`**.
 2. Ejecuta el instalador con tu usuario habitual y conserva la ubicación propuesta.
 3. Abre **Senda** desde el menú Inicio.
 4. En **Ajustes → Modelo de voz**, elige un modelo y pulsa **Descargar modelo**:
@@ -60,7 +60,7 @@ La primera transcripción puede tardar más porque carga el modelo. El tiempo de
 
 ![Cápsula de estado durante la grabación](docs/images/windows-capsule.png)
 
-En Windows 0.2.1, la cápsula se sitúa abajo en el monitor de la aplicación de destino y conserva esa posición durante el dictado. Cerrar la ventana principal deja Senda en la bandeja: para terminar el proceso, abre su icono junto al reloj y elige **Salir**.
+En Windows 0.2.3, la cápsula se sitúa abajo en el monitor de la aplicación de destino y conserva esa posición durante el dictado. Cerrar la ventana principal deja Senda en la bandeja: para terminar el proceso, abre su icono junto al reloj y elige **Salir**.
 
 ## Actualizar una instalación existente
 
@@ -85,7 +85,7 @@ Una copia portable es independiente de la instalada en `%LOCALAPPDATA%\Programs\
 
 ## Ajustes útiles
 
-Pulsa **Guardar ajustes** después de realizar cambios.
+Pulsa **Guardar ajustes** después de realizar cambios. El botón permanece visible al desplazarte por Ajustes.
 
 | Opción | Para qué sirve |
 | --- | --- |
@@ -120,7 +120,7 @@ Se omite si las comprobaciones de entrega fallan. El despacho de Enter no demues
 
 </details>
 
-*Capturas de las vistas reales de Windows 0.2.1 con datos de demostración. No muestran el historial del usuario.*
+*Capturas de las vistas reales de Windows 0.2.3 con datos de demostración. No muestran el historial del usuario.*
 
 ## Privacidad y datos
 
@@ -134,7 +134,7 @@ Se omite si las comprobaciones de entrega fallan. El despacho de Enter no demues
 
 ## Linux: alpha experimental con Flatpak
 
-La versión Linux ofrece interfaz GTK4/libadwaita, transcripción local con CPU y modelos Base/Small. El paquete incluye los componentes necesarios del motor.
+La versión Linux ofrece interfaz GTK4/libadwaita, transcripción local con CPU y modelos Whisper multilingües. El paquete incluye los componentes necesarios del motor.
 
 **En GNOME y KDE con Wayland, utiliza Copiar y pega manualmente.** Las restricciones de Flatpak impiden verificar el campo externo; esta alpha omite el pegado y Enter automáticos. El estado del dictado utiliza notificaciones del escritorio. La compatibilidad con micrófonos físicos aún no está confirmada.
 

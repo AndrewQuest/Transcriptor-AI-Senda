@@ -82,4 +82,14 @@ public sealed class HotkeyTests
         Assert.Equal(HotkeyAction.Released, state.Process(0x20, false, HotkeyModifiers.None, true, false));
         Assert.Equal(HotkeyAction.Pressed, state.Process(0x79, true, HotkeyModifiers.Alt, true, false));
     }
+
+    [Fact]
+    public void ResetAfterResumeAllowsANewPressWithoutTheLostRelease()
+    {
+        var state = new HoldHotkey();
+        Assert.Equal(HotkeyAction.Pressed, state.Process(0x20, true, state.Gesture.Modifiers, true, false));
+        state.Reset(); Assert.False(state.IsHeld);
+        Assert.Equal(HotkeyAction.Pressed, state.Process(0x20, true, state.Gesture.Modifiers, true, false));
+        Assert.Equal(HotkeyAction.Released, state.Process(0x20, false, HotkeyModifiers.None, true, false));
+    }
 }

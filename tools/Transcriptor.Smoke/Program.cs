@@ -6,7 +6,7 @@ using Whisper.net.Logger;
 
 if (args.Length == 0 || args.Contains("--help"))
 {
-    Console.WriteLine("Transcriptor.Smoke --model <ggml.bin> --audio <pcm16-mono-16k.wav> [--language auto|es|en] [--acceleration cpu|vulkan] [--threads N] [--punctuation] [--repeat N] [--diagnostics] [--expect <fragment>]");
+    Console.WriteLine("Transcriptor.Smoke --model <ggml.bin> --audio <pcm16-mono-16k.wav> [--language auto|es|en] [--acceleration cpu|vulkan] [--threads N] [--punctuation] [--repeat N] [--unload-between] [--diagnostics] [--expect <fragment>]");
     return args.Length == 0 ? 2 : 0;
 }
 try
@@ -53,6 +53,7 @@ try
     var passed = true;
     for (var iteration = 1; iteration <= repeats; iteration++)
     {
+        if (iteration > 1 && args.Contains("--unload-between")) await engine.UnloadAsync();
         var result = await engine.TranscribeAsync(new(wave, TimeSpan.FromSeconds(bytes / 32000d), 1), Option("--language", "auto"), cancellation.Token);
         Console.WriteLine(result.Text);
         Console.WriteLine(JsonSerializer.Serialize(new { audioSeconds = result.AudioDuration.TotalSeconds,

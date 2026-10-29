@@ -6,6 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/Senda.ico</ApplicationIcon>
     <AssemblyName>Senda</AssemblyName>
     <Product>Senda — Dictado local</Product>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
@@ -13,6 +14,7 @@
     <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/Senda.ico" />
     <ProjectReference Include="../Transcriptor.Core/Transcriptor.Core.csproj" />
     <ProjectReference Include="../Transcriptor.Inference/Transcriptor.Inference.csproj" />
     <PackageReference Include="NAudio" Version="2.2.1" />

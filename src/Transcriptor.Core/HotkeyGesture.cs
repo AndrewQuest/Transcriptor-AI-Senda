@@ -112,4 +112,6 @@ public sealed class HoldHotkey
         }
         return HotkeyAction.None;
     }
+
+    public void Reset() { IsHeld = false; _activeKey = 0; _suppressedKey = 0; }
 }

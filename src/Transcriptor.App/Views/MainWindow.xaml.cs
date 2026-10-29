@@ -15,7 +15,22 @@ public partial class MainWindow : Window
     public MainWindow() { InitializeComponent(); }
     private void HomeClicked(object sender, RoutedEventArgs e) => Navigate(0);
     private void HistoryClicked(object sender, RoutedEventArgs e) => Navigate(1);
-    private void SettingsClicked(object sender, RoutedEventArgs e) => Navigate(2);
+    private async void SettingsClicked(object sender, RoutedEventArgs e)
+    {
+        Navigate(2);
+        await RefreshModelsAsync();
+    }
+    private async Task RefreshModelsAsync()
+    {
+        if (DataContext is not MainViewModel viewModel) return;
+        try { await viewModel.RefreshModelStateAsync(); }
+        catch (Exception error) { viewModel.ReportError(error); }
+    }
+    protected override async void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        await RefreshModelsAsync();
+    }
     private void CorrectClicked(object sender, RoutedEventArgs e) => CorrectionRequested?.Invoke();
     private void Navigate(int index)
     {

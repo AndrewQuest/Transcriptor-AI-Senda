@@ -24,7 +24,7 @@ public sealed class DictationTests
         var engine = new Engine(); var session = new DictationSession(capture, engine);
         string? message = null; session.Failed += text => message = text;
         await session.StartAsync(); await session.StopAsync("auto");
-        Assert.Equal(0, engine.Calls); Assert.Contains("voz", message); Assert.Equal(DictationState.Idle, session.State);
+        Assert.Equal(0, engine.Calls); Assert.Contains("voz", message); Assert.Equal(DictationState.Error, session.State);
     }
 
     [Fact]
@@ -69,12 +69,66 @@ public sealed class DictationTests
         Assert.Equal(DictationState.Error, session.State); Assert.Equal(0, engine.Calls);
     }
 
+    [Fact]
+    public async Task ReleaseWhileOpeningWaitsForCaptureAndProducesOneResult()
+    {
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var capture = new Capture { StartWait = ready.Task };
+        var engine = new Engine(); var session = new DictationSession(capture, engine);
+        var start = session.StartAsync();
+        Assert.Equal(DictationState.Starting, session.State);
+        var stop = session.StopAsync("es");
+        Assert.False(stop.IsCompleted);
+        ready.SetResult();
+        await Task.WhenAll(start, stop);
+        Assert.Equal(1, engine.Calls);
+        Assert.Equal(DictationState.Completed, session.State);
+    }
+
+    [Fact]
+    public async Task CancelDuringOpeningSuppressesLateStartAndAllowsRetry()
+    {
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var capture = new Capture { StartWait = ready.Task };
+        var session = new DictationSession(capture, new Engine());
+        var start = session.StartAsync(); var stop = session.StopAsync("es");
+        session.Cancel(); await Task.WhenAll(start, stop);
+        Assert.Equal(DictationState.Cancelled, session.State);
+        capture.StartWait = null;
+        await session.StartAsync();
+        Assert.Equal(DictationState.Recording, session.State);
+    }
+
+    [Fact]
+    public async Task DeviceErrorDuringOpeningIsReportedInsteadOfSilentCancellation()
+    {
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var session = new DictationSession(new Capture { StartWait = ready.Task }, new Engine());
+        string? failure = null; session.Failed += error => failure = error;
+        var start = session.StartAsync(); session.CaptureFailed(new IOException("device unavailable"));
+        await start;
+        Assert.Equal("device unavailable", failure);
+        Assert.Equal(DictationState.Error, session.State);
+    }
+
+    [Fact]
+    public async Task ShortCaptureKeepsAnExplicitErrorAndAllowsRetry()
+    {
+        var engine = new Engine();
+        var capture = new Capture { Clip = new([1, 2], TimeSpan.FromMilliseconds(40), .5f) };
+        var session = new DictationSession(capture, engine);
+        await session.StartAsync(); await session.StopAsync("es");
+        Assert.Equal(DictationState.Error, session.State);
+        Assert.Equal(0, engine.Calls);
+        await session.StartAsync(); Assert.Equal(2, capture.Starts);
+    }
+
     private sealed class Capture : IAudioCapture
     {
-        public int Starts; public AudioClip Clip = new([1, 2], TimeSpan.FromSeconds(2), .5f);
+        public int Starts; public AudioClip Clip = new([1, 2], TimeSpan.FromSeconds(2), .5f); public Task? StartWait;
         public event Action<float>? LevelChanged { add { } remove { } }
         public event Action<Exception>? Failed { add { } remove { } }
-        public Task StartAsync(CancellationToken cancellationToken) { Starts++; return Task.CompletedTask; }
+        public async Task StartAsync(CancellationToken cancellationToken) { Starts++; if (StartWait is not null) await StartWait.WaitAsync(cancellationToken); }
         public Task<AudioClip> StopAsync(CancellationToken cancellationToken) => Task.FromResult(Clip);
         public void Cancel() { } public void Dispose() { }
     }

@@ -15,6 +15,8 @@ public sealed class WhisperEngine(Func<AppSettings> settings) : ITranscriptionEn
     private WhisperFactory? _factory;
     private string? _loadedPath;
     private bool _disposed;
+    private int _gpuActive;
+    private long _unloadGeneration;
 
     public static bool RequiresRestart(AppSettings config)
     {
@@ -50,13 +52,14 @@ public sealed class WhisperEngine(Func<AppSettings> settings) : ITranscriptionEn
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             _unload?.Change(Timeout.Infinite, Timeout.Infinite);
+            Interlocked.Increment(ref _unloadGeneration);
             var config = settings();
             if (!File.Exists(config.ModelPath)) throw new FileNotFoundException(UiText.Get("Elige o descarga un modelo en Ajustes antes de dictar."));
             return await Task.Run(async () =>
             {
                 var watch = Stopwatch.StartNew();
                 ConfigureRuntime(config);
-                var gpuActive = 0;
+                var gpuActive = _factory is not null && _loadedPath == config.ModelPath ? _gpuActive : 0;
                 // Observe only the backend notice from our pinned native version. Do not retain logs or text.
                 using var backendLog = LogProvider.AddLogger((_, message) =>
                 {
@@ -74,6 +77,7 @@ public sealed class WhisperEngine(Func<AppSettings> settings) : ITranscriptionEn
                         UseGpu = config.Acceleration == "vulkan"
                     });
                     _loadedPath = config.ModelPath;
+                    _gpuActive = Volatile.Read(ref gpuActive);
                     loadTime = watch.Elapsed;
                 }
                 cancellationToken.ThrowIfCancellationRequested();
@@ -114,15 +118,29 @@ public sealed class WhisperEngine(Func<AppSettings> settings) : ITranscriptionEn
         if (_disposed) return;
         // One shot timer replaces any previous unload, without a polling loop.
         _unload?.Dispose();
-        _unload = new Timer(_ => UnloadIfIdle(), null,
+        var generation = Interlocked.Increment(ref _unloadGeneration);
+        _unload = new Timer(_ => UnloadIfIdle(generation), null,
             TimeSpan.FromMinutes(Math.Max(1, settings().UnloadAfterMinutes)), Timeout.InfiniteTimeSpan);
     }
 
     private Timer? _unload;
-    private void UnloadIfIdle()
+    private void UnloadIfIdle(long generation)
     {
         if (!_gate.Wait(0)) return;
-        try { _factory?.Dispose(); _factory = null; _loadedPath = null; }
+        try
+        {
+            if (generation != Interlocked.Read(ref _unloadGeneration)) return;
+            _factory?.Dispose(); _factory = null; _loadedPath = null; _gpuActive = 0;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task UnloadAsync()
+    {
+        Interlocked.Increment(ref _unloadGeneration);
+        _unload?.Dispose(); _unload = null;
+        await _gate.WaitAsync();
+        try { _factory?.Dispose(); _factory = null; _loadedPath = null; _gpuActive = 0; }
         finally { _gate.Release(); }
     }
 

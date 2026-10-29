@@ -111,6 +111,9 @@ public sealed class StorageAndDownloadTests : IDisposable
     [Theory]
     [InlineData(ModelDownload.FileName)]
     [InlineData(ModelDownload.SmallFileName)]
+    [InlineData(ModelDownload.TinyFileName)]
+    [InlineData(ModelDownload.MediumFileName)]
+    [InlineData(ModelDownload.TurboFileName)]
     public async Task DownloadUsesPinnedRevisionAndReusesVerifiedLocalArtifact(string fileName)
     {
         using var handler = new ModelHost { FileName = fileName };

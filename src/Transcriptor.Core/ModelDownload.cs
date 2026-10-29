@@ -10,17 +10,38 @@ public sealed class ModelDownload(HttpClient http)
     public const string Repository = "ggerganov/whisper.cpp";
     public const string FileName = "ggml-base-q5_1.bin";
     public const string SmallFileName = "ggml-small-q5_1.bin";
+    public const string TinyFileName = "ggml-tiny-q5_1.bin";
+    public const string MediumFileName = "ggml-medium-q5_0.bin";
+    public const string TurboFileName = "ggml-large-v3-turbo-q5_0.bin";
+    public static IReadOnlyList<string> Catalog { get; } = Array.AsReadOnly(new[]
+        { TinyFileName, FileName, SmallFileName, MediumFileName, TurboFileName });
+
+    public static string DisplayName(string path) => Path.GetFileName(path) switch
+    {
+        TinyFileName => "Whisper Tiny · OpenAI",
+        FileName => "Whisper Base · OpenAI",
+        SmallFileName => "Whisper Small · OpenAI",
+        MediumFileName => "Whisper Medium · OpenAI",
+        TurboFileName => "Whisper Large v3 Turbo · OpenAI",
+        var name => UiText.Get("Modelo importado: {0}", name)
+    };
+
+    public static string DownloadLabel(string fileName) => DisplayName(fileName) + " · " + (fileName switch
+    {
+        TinyFileName => "31 MiB", FileName => "57 MiB", SmallFileName => "181 MiB",
+        MediumFileName => "514 MiB", TurboFileName => "548 MiB", _ => ""
+    });
 
     public async Task<string> DownloadAsync(string directory, IProgress<double>? progress, CancellationToken cancellationToken, string fileName = FileName)
     {
-        if (fileName is not (FileName or SmallFileName)) throw new ArgumentException(UiText.Get("Elige un modelo del catálogo de Senda."), nameof(fileName));
+        if (!Catalog.Contains(fileName)) throw new ArgumentException(UiText.Get("Elige un modelo del catálogo de Senda."), nameof(fileName));
         using var metadata = await http.GetFromJsonAsync<JsonDocument>(
             $"https://huggingface.co/api/models/{Repository}", cancellationToken)
             ?? throw new InvalidDataException(UiText.Get("No se pudo consultar la versión del modelo."));
         var revision = metadata.RootElement.GetProperty("sha").GetString()!;
         if (revision.Length != 40 || !revision.All(Uri.IsHexDigit)) throw new InvalidDataException(UiText.Get("Versión del modelo no válida."));
         using var tree = await http.GetFromJsonAsync<JsonDocument>(
-            $"https://huggingface.co/api/models/{Repository}/tree/{revision}?recursive=false", cancellationToken)
+            $"https://huggingface.co/api/models/{Repository}/tree/{revision}?recursive=false&limit=1000", cancellationToken)
             ?? throw new InvalidDataException(UiText.Get("No se pudo consultar la firma del modelo."));
         var file = tree.RootElement.EnumerateArray().FirstOrDefault(x => x.GetProperty("path").GetString() == fileName);
         if (file.ValueKind == JsonValueKind.Undefined) throw new InvalidDataException(UiText.Get("El modelo no aparece en el repositorio oficial."));

@@ -75,4 +75,11 @@ public sealed class GlobalHotkey : IDisposable
     }
 
     public void Dispose() => NativeMethods.UnhookWindowsHookEx(_hook);
+
+    public void Reset()
+    {
+        _state.Reset(); _modifiers.Clear(); CanCancel = false;
+        foreach (var key in new[] { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C })
+            if ((NativeMethods.GetAsyncKeyState(key) & 0x8000) != 0) _modifiers.Add(key);
+    }
 }

@@ -1,7 +1,7 @@
 <Window x:Class="Transcriptor.App.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Style="{StaticResource {x:Type Window}}"
+        Style="{StaticResource {x:Type Window}}" Icon="pack://application:,,,/Senda;component/Assets/Senda.ico"
         Title="{DynamicResource 'Senda — Dictado local'}" Width="1120" Height="820" MinWidth="940" MinHeight="650" WindowStartupLocation="CenterScreen">
   <Grid>
     <Grid.ColumnDefinitions><ColumnDefinition Width="228" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -73,6 +73,7 @@
                 </TextBlock>
                 <TextBox Text="{Binding LastText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="180" VerticalScrollBarVisibility="Auto" BorderThickness="0" Background="Transparent" Padding="0,15" FontSize="16" Visibility="{Binding HasLastText, Converter={StaticResource BoolVisibility}}" />
                 <TextBlock Text="{Binding LastRunDetails}" Style="{StaticResource Caption}" Margin="0,4,0,0" Visibility="{Binding HasLastText, Converter={StaticResource BoolVisibility}}" />
+                <TextBlock Text="{Binding LastCaptureDetails}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding HasLastText, Converter={StaticResource BoolVisibility}}"><Button Content="{DynamicResource 'Copiar texto'}" Command="{Binding CopyLastCommand}" Padding="14,8" /><Button Content="{DynamicResource 'Corregir'}" Click="CorrectClicked" Margin="10,0,0,0" Padding="14,8" /></StackPanel>
               </StackPanel>
             </Border>
@@ -104,8 +105,15 @@
               <TextBlock Text="{DynamicResource 'Modelo de voz'}" Style="{StaticResource SectionTitle}" />
               <TextBlock Text="{Binding ModelName}" Margin="0,12,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" />
               <TextBlock Text="{Binding ModelPath}" FontSize="11" Foreground="{DynamicResource Subtle}" Margin="0,5,0,12" />
-              <TextBlock Text="{DynamicResource 'Base consume menos recursos. Small puede mejorar el reconocimiento y la puntuación, a cambio de más memoria y tiempo. Ambos funcionan sin Internet tras la descarga.'}" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,0,0,12" LineHeight="21" />
-              <ComboBox x:Name="DownloadModelPicker" ItemsSource="{Binding DownloadModels}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DownloadModelFile}" Margin="0,0,0,14" />
+              <TextBlock Text="{DynamicResource 'Modelos instalados'}" Margin="0,2,0,8" />
+              <ComboBox x:Name="InstalledModelPicker" ItemsSource="{Binding InstalledModels}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedInstalledModel}" IsEnabled="{Binding CanManageModels}" AutomationProperties.Name="{DynamicResource 'Modelos instalados'}" Margin="0,0,0,12" />
+              <WrapPanel Margin="0,0,0,10"><Button x:Name="DefaultModelButton" Content="{DynamicResource 'Usar como predeterminado'}" Command="{Binding UseModelCommand}" Margin="0,0,10,0" /><Button x:Name="DeleteModelButton" Content="{DynamicResource 'Borrar modelo'}" Command="{Binding DeleteModelCommand}" Margin="0,0,10,0" /><Button Content="{DynamicResource 'Actualizar lista'}" Command="{Binding RefreshModelsCommand}" /></WrapPanel>
+              <TextBlock Text="{DynamicResource 'El predeterminado se activa al reiniciar. Liberarlo de la memoria no lo desinstala. Para borrarlo, elige primero otro predeterminado.'}" Style="{StaticResource Caption}" Margin="0,0,0,18" />
+              <TextBlock Text="{DynamicResource 'Descargar otro modelo multilingüe'}" Margin="0,0,0,8" />
+              <TextBlock Text="{DynamicResource 'Catálogo completo: puedes volver a descargar cualquier modelo que hayas borrado.'}" Style="{StaticResource Caption}" Margin="0,0,0,8" />
+              <TextBlock Text="{DynamicResource 'Todos admiten español e inglés y funcionan sin Internet después de descargarlos. Tiny y Base consumen menos recursos. Medium y Turbo necesitan más RAM; el tamaño de descarga no representa su consumo de memoria.'}" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,0,0,12" LineHeight="21" TextWrapping="Wrap" />
+              <ComboBox x:Name="DownloadModelPicker" ItemsSource="{Binding DownloadModels}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DownloadModelFile}" IsEnabled="{Binding CanManageModels}" AutomationProperties.Name="{DynamicResource 'Descargar otro modelo multilingüe'}" Margin="0,0,0,14" />
+              <TextBlock Text="{DynamicResource 'Descargar o importar un modelo lo establece como predeterminado. Cambiar solo este selector no cambia el modelo activo.'}" Style="{StaticResource Caption}" Margin="0,0,0,12" />
               <WrapPanel><Button Content="{DynamicResource 'Descargar modelo'}" Style="{StaticResource PrimaryButton}" Command="{Binding DownloadModelCommand}" Margin="0,0,10,0" /><Button Content="{DynamicResource 'Importar modelo'}" Command="{Binding ImportModelCommand}" ToolTip="{DynamicResource 'Importar un archivo Whisper GGML .bin'}" /></WrapPanel>
               <StackPanel Visibility="{Binding Downloading, Converter={StaticResource BoolVisibility}}" Margin="0,18,0,0"><ProgressBar Value="{Binding DownloadProgress, Mode=OneWay}" Maximum="100" /><Button Content="{DynamicResource 'Cancelar descarga'}" Command="{Binding CancelDownloadCommand}" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="10,6" /></StackPanel>
             </StackPanel></Border>
@@ -143,11 +151,16 @@
               <TextBlock Text="{DynamicResource 'Al desactivarlo y guardar, se elimina el historial existente. El audio se descarta siempre.'}" Style="{StaticResource Caption}" Margin="30,0,0,9" LineHeight="19" />
               <CheckBox Content="{DynamicResource 'Iniciar en la bandeja al entrar en Windows'}" IsChecked="{Binding LaunchAtLogin}" />
             </StackPanel></Border>
-            <Button Content="{DynamicResource 'Guardar ajustes'}" Command="{Binding SaveSettingsCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,0,0,10" />
           </StackPanel>
         </Grid>
       </ScrollViewer>
-      <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="2,15,0,0" Margin="0,22,0,0"><TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}" AutomationProperties.LiveSetting="Polite" /></Border>
+      <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="2,15,0,0" Margin="0,16,0,0">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+          <Button x:Name="SaveSettingsButton" Grid.Column="1" Content="{DynamicResource 'Guardar ajustes'}" Command="{Binding SaveSettingsCommand}" Style="{StaticResource PrimaryButton}" Margin="20,0,0,0" Visibility="{Binding Visibility, ElementName=SettingsPanel}" />
+        </Grid>
+      </Border>
     </Grid>
   </Grid>
 </Window>

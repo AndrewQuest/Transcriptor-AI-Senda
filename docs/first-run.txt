@@ -1,8 +1,10 @@
-Senda 0.2.0 — Windows x64
+Senda 0.2.3 — Windows x64
 
 Descomprime toda la carpeta y abre Senda.exe. Conserva las DLL y las carpetas junto al ejecutable.
 
 En Ajustes, descarga el modelo recomendado o importa un modelo Whisper GGML .bin. La descarga necesita Internet; el dictado posterior funciona sin conexión. Si Windows indica que falta el motor nativo, instala Microsoft Visual C++ Redistributable 2015–2022 x64 desde la web de Microsoft.
+
+En Modelos instalados puedes elegir Usar como predeterminado: se conservará al reiniciar Senda o Windows. Puedes borrar modelos que no sean el predeterminado. Descargar o importar uno lo activa; cambiar solamente el selector de descarga no cambia el modelo activo. Liberar el modelo de la memoria no lo desinstala.
 
 Haz clic en un campo de texto. Mantén Ctrl + Alt + Espacio, habla y suelta para transcribir y pegar. Esc cancela. El primer dictado carga el modelo y puede tardar más.
 

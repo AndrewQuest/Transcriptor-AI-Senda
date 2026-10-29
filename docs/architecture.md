@@ -24,7 +24,11 @@ Cada dictado crea su procesador. La ayuda opcional `UsePunctuationPrompt` añade
 
 La inserción conserva el foco original y el portapapeles, siempre que el usuario no lo haya cambiado durante el pegado. No reactiva otra aplicación si el usuario cambió de ventana durante la transcripción. Una corrección necesita un TextPattern de UI Automation, un documento sin modificaciones y un rango que coincida exactamente con el texto insertado. Si falta esa evidencia se ofrece copiar.
 
-La descarga permite Base y Small multilingües q5_1 del catálogo, consulta una revisión Git inmutable y verifica tamaño y SHA-256 LFS antes de sustituir el archivo final. Se rechazan nombres ajenos al catálogo antes de hacer peticiones. Un fallo o cancelación elimina el parcial y conserva el modelo anterior. No hay rutas de inferencia en la nube.
+El catálogo permite Tiny, Base y Small multilingües q5_1, Medium q5_0 y Large v3 Turbo q5_0. La descarga consulta una revisión Git inmutable y verifica tamaño y SHA-256 LFS antes de sustituir el archivo final. Se rechazan nombres ajenos al catálogo antes de hacer peticiones. Un fallo o cancelación elimina el parcial y conserva el modelo anterior. No hay rutas de inferencia en la nube.
+
+`AppSettings.ModelPath` identifica el modelo predeterminado activo y se conserva al reiniciar. `DownloadModelFile` guarda por separado el selector de descargas; las configuraciones antiguas lo inicializan a partir del modelo activo. `ModelLibrary` enumera archivos GGML completos del directorio de modelos y solo permite eliminar archivos propios que no sean el predeterminado. Cambiar de modelo libera el motor anterior antes de guardar la nueva selección. Durante la preparación y el guardado de ajustes se bloquean cambios de modelo y nuevos dictados.
+
+La captura distingue `Starting` de `Recording`: el segundo estado requiere haber recibido un buffer del dispositivo. Se detectan tiempos de espera al abrir y detener, interrupciones del flujo y eventos tardíos de dispositivos anteriores. Silencio, capturas breves y reconocimiento vacío conservan un estado de error visible. Al volver de suspensión se descarta la operación interrumpida, se restablece el atajo y se libera el modelo nativo para cargarlo de nuevo. Las métricas de captura solo conservan duración, nivel y tamaño, sin retener el audio.
 
 La configuración vive en `settings.json`; el historial cifrado en `history.dat`. No se incluyen pesos en Git ni en el instalador. El usuario descarga o importa un modelo en la primera ejecución.
 

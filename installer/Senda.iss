@@ -24,6 +24,7 @@ OutputBaseFilename=Senda-Setup-{#AppVersion}-win-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\src\Transcriptor.App\Assets\Senda.ico
 UninstallDisplayIcon={app}\Senda.exe
 CloseApplications=yes
 RestartApplications=no

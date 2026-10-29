@@ -25,7 +25,7 @@
       </StackPanel>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
         <TextBlock x:Name="StateText" Text="{DynamicResource 'Te escucho…'}" Foreground="{DynamicResource OverlayInk}" FontWeight="SemiBold" FontSize="13" />
-        <TextBlock x:Name="HintText" Text="{DynamicResource 'Suelta el atajo para insertar · Esc cancela'}" Foreground="{DynamicResource OverlayMuted}" FontSize="10.5" Margin="0,4,0,0" />
+        <TextBlock x:Name="HintText" Text="{DynamicResource 'Suelta el atajo para insertar · Esc cancela'}" Foreground="{DynamicResource OverlayMuted}" FontSize="10.5" Margin="0,4,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="30" />
       </StackPanel>
     </Grid>
   </Grid>

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Transcriptor.App.Services;
 using Transcriptor.App.ViewModels;
 using Transcriptor.App.Views;
@@ -34,6 +35,7 @@ public partial class App : System.Windows.Application
     private Guid _lastHistoryId;
     private bool _delivering;
     private bool _exiting;
+    private bool _recovering;
     private readonly Stopwatch _deliveryWatch = new();
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -67,14 +69,20 @@ public partial class App : System.Windows.Application
             _main.CorrectionRequested += ShowCorrection;
             _overlay = new OverlayWindow();
             _appearance.Register(_overlay);
-            _capture = new MicrophoneCapture(() => _viewModel.Settings.MicrophoneIndex);
+            _capture = new MicrophoneCapture(_viewModel.ResolveMicrophoneIndex);
             _engine = new WhisperEngine(() => _viewModel.Settings);
+            _viewModel.ReleaseModelAsync = _engine.UnloadAsync;
             _session = new DictationSession(_capture, _engine);
             _session.StateChanged += OnStateChanged;
             _session.Failed += message => _viewModel.Status = message;
             _session.Completed += transcript => Run(() => AcceptTranscriptAsync(transcript));
+            _session.AudioCaptured += _viewModel.ReportCapture;
             _capture.LevelChanged += level => Dispatcher.BeginInvoke(() => _overlay.SetLevel(level));
-            _capture.Failed += error => Dispatcher.BeginInvoke(() => _session.CaptureFailed(error));
+            _capture.Failed += error =>
+            {
+                var operation = _session.OperationId;
+                Dispatcher.BeginInvoke(() => { if (_session.OperationId == operation) _session.CaptureFailed(error); });
+            };
             _hotkey = new GlobalHotkey(Dispatcher) { Shortcut = _viewModel.Settings.Hotkey };
             _main.HotkeyCaptureChanged += capturing => { if (_hotkey is not null) _hotkey.Enabled = !capturing; };
             _hotkey.Pressed += target => Run(() => StartAsync(target));
@@ -82,6 +90,7 @@ public partial class App : System.Windows.Application
             _hotkey.Cancelled += CancelOperations;
             _viewModel.SettingsChanged += settings =>
             {
+                if (_exiting || _hotkey is null) return;
                 _hotkey.Shortcut = settings.Hotkey; _appearance.Apply(settings);
                 if (WhisperEngine.RequiresRestart(settings))
                     _viewModel.Status = UiText.Get("Ajustes guardados. Sal de Senda desde la bandeja y vuelve a abrirla para cambiar la aceleración.");
@@ -89,6 +98,7 @@ public partial class App : System.Windows.Application
             _overlayTimer.Tick += (_, _) => { _overlayTimer.Stop(); if (!_viewModel.Busy) _overlay.Dismiss(); };
             ConfigureTray();
             UiText.Changed += RefreshTrayLanguage;
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
             if (!e.Args.Contains("--background"))
             {
                 if (_viewModel.ModelReady) _main.Show(); else _main.ShowSettings();
@@ -149,14 +159,14 @@ public partial class App : System.Windows.Application
 
     private async Task StartAsync(IntPtr target)
     {
-        if (_viewModel is null || _session is null || _viewModel.Busy || _viewModel.PreparingModel || _viewModel.CapturingHotkey) return;
+        if (_viewModel is null || _session is null || _recovering || _viewModel.Busy || _viewModel.PreparingModel || _viewModel.CapturingHotkey) return;
         if (!_viewModel.ModelReady) { _main?.ShowSettings(); _viewModel.Status = UiText.Get("Descarga o importa un modelo para empezar."); return; }
         if (await Task.Run(TextInsertion.IsPasswordField)) { _viewModel.Status = UiText.Get("El dictado está desactivado en campos de contraseña."); return; }
         // The key can be released or shortcut capture can begin while accessibility inspection is pending.
-        if (_hotkey?.IsHeld != true || !_hotkey.Enabled || _viewModel.Busy || _viewModel.PreparingModel || _viewModel.CapturingHotkey || NativeMethods.GetForegroundWindow() != target) return;
+        if (_hotkey?.IsHeld != true || !_hotkey.Enabled || _recovering || _viewModel.Busy || _viewModel.PreparingModel || _viewModel.CapturingHotkey || NativeMethods.GetForegroundWindow() != target) return;
         _correction?.Close(); _correction = null;
         var deliveryTarget = await DeliveryTarget.CaptureAsync(target);
-        if (_hotkey?.IsHeld != true || !_hotkey.Enabled || !deliveryTarget.MatchesNative()) return;
+        if (_hotkey?.IsHeld != true || !_hotkey.Enabled || _recovering || _viewModel.Busy || _viewModel.PreparingModel || !deliveryTarget.MatchesNative()) return;
         _target = deliveryTarget;
         _pressEnterForSession = _viewModel.Settings.PressEnterAfterPaste;
         _deliveryCancellation?.Dispose();
@@ -170,10 +180,14 @@ public partial class App : System.Windows.Application
     {
         if (_viewModel is null || _overlay is null) return;
         _overlayTimer.Stop();
-        _viewModel.Busy = state is DictationState.Recording or DictationState.Transcribing || _delivering;
+        _viewModel.Busy = state is DictationState.Starting or DictationState.Recording or DictationState.Transcribing || _delivering;
         if (_hotkey is not null) _hotkey.CanCancel = _viewModel.Busy;
         switch (state)
         {
+            case DictationState.Starting:
+                _viewModel.ReportCapture(new([], TimeSpan.Zero, 0));
+                _viewModel.StateLabel = UiText.Get("Abriendo micrófono…");
+                _overlay.Display(UiText.Get("Abriendo micrófono…"), UiText.Get("Espera a «Te escucho» antes de hablar · Esc cancela")); break;
             case DictationState.Recording:
                 _viewModel.StateLabel = UiText.Get("Te escucho…");
                 _overlay.Display(UiText.Get("Te escucho…"), UiText.Get(_pressEnterForSession ? "Al terminar: pegar + Enter · Esc cancela" : "Suelta el atajo para insertar · Esc cancela")); break;
@@ -185,7 +199,7 @@ public partial class App : System.Windows.Application
                 _viewModel.StateLabel = UiText.Get("Dictado cancelado"); _viewModel.Status = UiText.Get("Grabación descartada."); _overlay.Dismiss(); break;
             case DictationState.Error:
                 _viewModel.StateLabel = UiText.Get("Revisa el micrófono o el modelo");
-                _overlay.Display(UiText.Get("No se pudo completar"), UiText.Get("Abre Senda para ver los detalles")); _overlayTimer.Start(); break;
+                _overlay.Display(UiText.Get("No se pudo completar"), _viewModel.Status); _overlayTimer.Start(); break;
             case DictationState.Idle:
                 _viewModel.StateLabel = UiText.Get("Listo cuando tú lo estés"); _overlay.Dismiss(); break;
         }
@@ -250,10 +264,31 @@ public partial class App : System.Windows.Application
         _session?.Cancel();
     }
 
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs args) =>
+        Dispatcher.BeginInvoke(() => Run(() => RecoverAfterPowerChangeAsync(args.Mode)));
+
+    private async Task RecoverAfterPowerChangeAsync(PowerModes mode)
+    {
+        if (_exiting || _viewModel is null || mode == PowerModes.StatusChange) return;
+        _recovering = true;
+        try
+        {
+            CancelOperations(); _hotkey?.Reset();
+            if (mode == PowerModes.Resume)
+            {
+                if (_engine is not null) await _engine.UnloadAsync();
+                _viewModel.RefreshMicrophones();
+                _viewModel.Status = UiText.Get("Dispositivos preparados tras la suspensión. Inicia un nuevo dictado.");
+            }
+        }
+        finally { _recovering = false; }
+    }
+
     private async Task ExitAsync()
     {
         if (_exiting) return;
         _exiting = true;
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _hotkey?.Dispose(); _hotkey = null;
         CancelOperations();
         _overlayTimer.Stop();

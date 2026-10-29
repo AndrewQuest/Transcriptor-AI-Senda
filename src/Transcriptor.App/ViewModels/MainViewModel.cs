@@ -18,6 +18,7 @@ public sealed class Choice(string value, string label) : Bindable
 public sealed class MicrophoneChoice(int index, string name) : Bindable
 {
     public int Index { get; } = index;
+    public string DeviceName { get; } = name;
     private string _name = name;
     public string Name { get => _name; set => Set(ref _name, value); }
 }
@@ -29,11 +30,23 @@ public sealed class HistoryItem(HistoryEntry entry)
     public string Details => UiText.Get("{0:0.0} s de voz  ·  {1:0.0} s de proceso  ·  {2}", Entry.AudioSeconds, Entry.ProcessingSeconds, Entry.Engine);
 }
 
+public sealed class InstalledModelChoice(InstalledModel model, bool isDefault) : Bindable
+{
+    public string Path => model.Path;
+    public bool IsDefault => isDefault;
+    public string Label => ModelDownload.DisplayName(model.Path) +
+        (model.Available ? " · " + (model.Bytes / 1048576d).ToString("0", UiText.Culture) + " MiB" : " · " + UiText.Get("Archivo no disponible")) +
+        (isDefault ? " · " + UiText.Get("Predeterminado") : "");
+    public void RefreshLabel() => Raise(nameof(Label));
+}
+
 public sealed class MainViewModel : Bindable, IDisposable
 {
     private readonly LocalStorage _storage;
+    private readonly ModelLibrary _models;
+    private readonly Action<bool> _configureStartup;
     private readonly string _directory;
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(15) };
+    private readonly HttpClient _http;
     private CancellationTokenSource? _downloadCancellation;
     private CancellationTokenSource? _importCancellation;
     private TaskCompletionSource? _preparationFinished;
@@ -68,17 +81,27 @@ public sealed class MainViewModel : Bindable, IDisposable
     private int _unloadMinutes = 5;
     private string _search = "";
     private HistoryItem? _selectedEntry;
+    private InstalledModelChoice? _selectedInstalledModel;
+    private (double Seconds, float Peak, int Bytes)? _lastCapture;
     private List<HistoryEntry> _allHistory = [];
 
-    public MainViewModel(string directory)
+    public MainViewModel(string directory, Action<bool>? configureStartup = null, HttpClient? modelHttp = null)
     {
         _directory = directory;
+        _http = modelHttp ?? new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
+        _models = new ModelLibrary(Path.Combine(directory, "models"));
+        _configureStartup = configureStartup ?? ConfigureStartup;
         _storage = new LocalStorage(directory,
             data => ProtectedData.Protect(data, null, DataProtectionScope.CurrentUser),
             data => ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser));
-        DownloadModelCommand = new(DownloadModelAsync, ReportError, () => !Busy && !PreparingModel);
+        DownloadModelCommand = new(DownloadSelectedModelAsync, ReportError, () => !Busy && !PreparingModel);
+        RefreshModelsCommand = new(RefreshModelStateAsync, ReportError, () => CanManageModels);
         ImportModelCommand = new(ImportModelAsync, ReportError, () => !Busy && !PreparingModel);
         SaveSettingsCommand = new(SaveSettingsAsync, ReportError, () => !Busy && !PreparingModel && !CapturingHotkey);
+        UseModelCommand = new(() => ActivateModelAsync(SelectedInstalledModel!.Path), ReportError,
+            () => CanManageModels && SelectedInstalledModel is not null && !ModelLibrary.SamePath(SelectedInstalledModel.Path, _settings.ModelPath));
+        DeleteModelCommand = new(DeleteModelAsync, ReportError,
+            () => CanManageModels && SelectedInstalledModel is not null && !ModelLibrary.SamePath(SelectedInstalledModel.Path, _settings.ModelPath));
         ClearHistoryCommand = new(ClearHistoryAsync, ReportError);
         CopyLastCommand = new Command(() => Copy(LastText));
         CopyHistoryCommand = new Command(() => Copy(SelectedEntry?.Text ?? ""));
@@ -90,6 +113,7 @@ public sealed class MainViewModel : Bindable, IDisposable
     public string AppVersion => "Senda " + typeof(MainViewModel).Assembly.GetName().Version?.ToString(3);
     public string ActiveHotkey => HotkeyGesture.TryParse(_settings.Hotkey, out var gesture) ? gesture.DisplayName : HotkeyGesture.Default.DisplayName;
     public event Action<AppSettings>? SettingsChanged;
+    public Func<Task>? ReleaseModelAsync { get; set; }
     public string Status { get => _status; set => Set(ref _status, value); }
     public string StateLabel { get => _stateLabel; set => Set(ref _stateLabel, value); }
     public string LastText { get => _lastText; set { if (Set(ref _lastText, value)) Raise(nameof(HasLastText)); } }
@@ -97,6 +121,15 @@ public sealed class MainViewModel : Bindable, IDisposable
     public string ModelName { get => _modelName; private set => Set(ref _modelName, value); }
     public string ModelPath { get => _modelPath; private set => Set(ref _modelPath, value); }
     public bool ModelReady => File.Exists(_settings.ModelPath);
+    public bool CanManageModels => !Busy && !PreparingModel;
+    public ObservableCollection<InstalledModelChoice> InstalledModels { get; } = [];
+    public InstalledModelChoice? SelectedInstalledModel
+    {
+        get => _selectedInstalledModel;
+        set { if (Set(ref _selectedInstalledModel, value)) RefreshCommands(); }
+    }
+    public string LastCaptureDetails => _lastCapture is not { } capture ? "" : UiText.Get(
+        "Última captura: {0:0.00} s · nivel {1:0.000} · {2} bytes de audio", capture.Seconds, capture.Peak, capture.Bytes);
     public bool Busy { get => _busy; set { if (Set(ref _busy, value)) { RefreshCommands(); Raise(nameof(CanCaptureHotkey)); } } }
     public bool Downloading { get => _downloading; private set { if (Set(ref _downloading, value)) RefreshCommands(); } }
     public bool PreparingModel { get => _preparingModel; private set { if (Set(ref _preparingModel, value)) { RefreshCommands(); Raise(nameof(CanCaptureHotkey)); } } }
@@ -150,7 +183,11 @@ public sealed class MainViewModel : Bindable, IDisposable
     public IReadOnlyList<int> UnloadOptions { get; } = [1, 5, 10];
     public IReadOnlyList<Choice> Themes { get; } = [new("dark", UiText.Get("Oscuro")), new("light", UiText.Get("Claro")), new("system", UiText.Get("Usar tema de Windows"))];
     public IReadOnlyList<Choice> AccelerationModes { get; } = [new("cpu", UiText.Get("CPU · predeterminado")), new("vulkan", UiText.Get("GPU · Vulkan"))];
-    public IReadOnlyList<Choice> DownloadModels { get; } = [new(ModelDownload.FileName, UiText.Get("Base · ligero (recomendado para CPU)")), new(ModelDownload.SmallFileName, UiText.Get("Small · más capacidad (más recursos)"))];
+    public IReadOnlyList<Choice> DownloadModels { get; } = ModelDownload.Catalog
+        .Select(file => new Choice(file, ModelDownload.DownloadLabel(file))).ToArray();
+    public AsyncCommand RefreshModelsCommand { get; }
+    public AsyncCommand UseModelCommand { get; }
+    public AsyncCommand DeleteModelCommand { get; }
     public AsyncCommand DownloadModelCommand { get; }
     public AsyncCommand ImportModelCommand { get; }
     public AsyncCommand SaveSettingsCommand { get; }
@@ -162,6 +199,9 @@ public sealed class MainViewModel : Bindable, IDisposable
     public async Task InitializeAsync()
     {
         _settings = await _storage.ReadSettingsAsync();
+        var savedModel = Path.GetFileName(_settings.ModelPath);
+        DownloadModelFile = ModelDownload.Catalog.Contains(_settings.DownloadModelFile) ? _settings.DownloadModelFile :
+            ModelDownload.Catalog.Contains(savedModel) ? savedModel : ModelDownload.FileName;
         InterfaceLanguage = _settings.InterfaceLanguage == "en" ? "en" : "es";
         UiText.SetLanguage(InterfaceLanguage);
         Language = Languages.Any(x => x.Value == _settings.Language) ? _settings.Language : "auto";
@@ -176,11 +216,10 @@ public sealed class MainViewModel : Bindable, IDisposable
         PressEnterAfterPaste = _settings.PressEnterAfterPaste;
         CpuThreads = Math.Clamp(_settings.CpuThreads, 1, ThreadOptions.Count);
         UnloadMinutes = UnloadOptions.Contains(_settings.UnloadAfterMinutes) ? _settings.UnloadAfterMinutes : 5;
-        Microphones.Add(new(-1, UiText.Get("Micrófono predeterminado de Windows")));
-        for (var i = 0; i < WaveIn.DeviceCount; i++) Microphones.Add(new(i, WaveIn.GetCapabilities(i).ProductName));
-        MicrophoneIndex = Microphones.Any(x => x.Index == _settings.MicrophoneIndex) ? _settings.MicrophoneIndex : -1;
+        RefreshMicrophones();
         _settings = _settings with { Language = Language, Hotkey = Hotkey, CpuThreads = CpuThreads, UnloadAfterMinutes = UnloadMinutes, MicrophoneIndex = MicrophoneIndex, Theme = Theme, Acceleration = Acceleration, InterfaceLanguage = InterfaceLanguage };
         RefreshModel();
+        RefreshInstalledModels();
         try
         {
             if (_settings.SaveHistory) await _storage.PruneAsync(_settings.HistoryRetentionDays);
@@ -224,13 +263,17 @@ public sealed class MainViewModel : Bindable, IDisposable
     private async Task SaveSettingsAsync()
     {
         if (!HotkeyGesture.TryParse(Hotkey, out var gesture)) throw new InvalidOperationException(UiText.Get("El atajo no es válido."));
+        PreparingModel = true;
+        var finished = _preparationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
         Hotkey = gesture.ToString();
         var next = _settings with { Language = Language, Hotkey = Hotkey, SaveHistory = SaveHistory,
+            DownloadModelFile = DownloadModelFile,
+            MicrophoneName = MicrophoneIndex == -1 ? "" : Microphones.FirstOrDefault(x => x.Index == MicrophoneIndex)?.DeviceName ?? _settings.MicrophoneName,
             LaunchAtLogin = LaunchAtLogin, MicrophoneIndex = MicrophoneIndex, CpuThreads = CpuThreads, UnloadAfterMinutes = UnloadMinutes,
             Theme = Theme, UseGlassEffects = UseGlassEffects, Acceleration = Acceleration, UsePunctuationPrompt = UsePunctuationPrompt, PressEnterAfterPaste = PressEnterAfterPaste, InterfaceLanguage = InterfaceLanguage == "en" ? "en" : "es" };
-        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-        if (LaunchAtLogin) key.SetValue("Senda", $"\"{Environment.ProcessPath}\" --background");
-        else key.DeleteValue("Senda", throwOnMissingValue: false);
+        _configureStartup(LaunchAtLogin);
         await _storage.WriteSettingsAsync(next);
         _settings = next;
         UiText.SetLanguage(_settings.InterfaceLanguage);
@@ -242,6 +285,15 @@ public sealed class MainViewModel : Bindable, IDisposable
         }
         Status = UiText.Get("Ajustes guardados.");
         SettingsChanged?.Invoke(_settings);
+        }
+        finally { PreparingModel = false; finished.TrySetResult(); }
+    }
+
+    private static void ConfigureStartup(bool enabled)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+        if (enabled) key.SetValue("Senda", $"\"{Environment.ProcessPath}\" --background");
+        else key.DeleteValue("Senda", throwOnMissingValue: false);
     }
 
     private async Task ImportModelAsync()
@@ -288,8 +340,9 @@ public sealed class MainViewModel : Bindable, IDisposable
         }
     }
 
-    private async Task DownloadModelAsync()
+    public async Task DownloadSelectedModelAsync()
     {
+        if (!CanManageModels) throw new InvalidOperationException(UiText.Get("Espera a que termine el dictado o la descarga."));
         PreparingModel = true; Downloading = true; DownloadProgress = 0;
         _preparationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         _downloadCancellation = new();
@@ -307,18 +360,124 @@ public sealed class MainViewModel : Bindable, IDisposable
 
     private async Task SetModelAsync(string path)
     {
-        var next = _settings with { ModelPath = path };
+        if (!File.Exists(path)) throw new FileNotFoundException(UiText.Get("El modelo ya no está disponible."));
+        if (ReleaseModelAsync is not null) await ReleaseModelAsync();
+        var fileName = Path.GetFileName(path);
+        var next = _settings with { ModelPath = Path.GetFullPath(path),
+            DownloadModelFile = ModelDownload.Catalog.Contains(fileName) ? fileName : DownloadModelFile };
         await _storage.WriteSettingsAsync(next);
         _settings = next;
+        DownloadModelFile = next.DownloadModelFile;
         RefreshModel();
+        RefreshInstalledModels();
         Status = UiText.Get("Modelo preparado. Mantén el atajo en cualquier campo de texto para dictar.");
         SettingsChanged?.Invoke(_settings);
+    }
+
+    public async Task ActivateModelAsync(string path)
+    {
+        if (!CanManageModels) throw new InvalidOperationException(UiText.Get("Espera a que termine el dictado o la descarga."));
+        if (!_models.Read().Any(model => ModelLibrary.SamePath(model.Path, path)))
+            throw new InvalidOperationException(UiText.Get("El modelo ya no está disponible."));
+        PreparingModel = true;
+        var finished = _preparationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        try { await SetModelAsync(path); Status = UiText.Get("Modelo predeterminado guardado. Se conservará al reiniciar."); }
+        finally { PreparingModel = false; finished.TrySetResult(); }
+    }
+
+    private async Task DeleteModelAsync()
+    {
+        if (SelectedInstalledModel is not { } selected || !CanManageModels) return;
+        PreparingModel = true;
+        var finished = _preparationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            if (System.Windows.MessageBox.Show(UiText.Get("¿Borrar el modelo {0}? Puedes volver a descargarlo o importarlo.", ModelDownload.DisplayName(selected.Path)),
+                UiText.Get("Borrar modelo"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            _models.Delete(selected.Path, _settings.ModelPath);
+            RefreshInstalledModels();
+            Status = UiText.Get("Modelo borrado. El predeterminado no cambió.");
+            await Task.CompletedTask;
+        }
+        finally { PreparingModel = false; finished.TrySetResult(); }
+    }
+
+    private void RefreshInstalledModels(bool selectDefault = true)
+    {
+        var selectedPath = selectDefault ? _settings.ModelPath : SelectedInstalledModel?.Path ?? _settings.ModelPath;
+        InstalledModels.Clear();
+        var models = _models.Read().ToList();
+        if (!string.IsNullOrEmpty(_settings.ModelPath) && !models.Any(model => ModelLibrary.SamePath(model.Path, _settings.ModelPath)))
+            models.Add(new(_settings.ModelPath, Path.GetFileName(_settings.ModelPath), 0, Available: false));
+        foreach (var model in models)
+            InstalledModels.Add(new(model, ModelLibrary.SamePath(model.Path, _settings.ModelPath)));
+        SelectedInstalledModel = InstalledModels.FirstOrDefault(model => ModelLibrary.SamePath(model.Path, selectedPath)) ??
+            InstalledModels.FirstOrDefault(model => model.IsDefault);
+        RefreshCommands();
+    }
+
+    public async Task RefreshModelStateAsync()
+    {
+        if (!CanManageModels) return;
+        PreparingModel = true;
+        var finished = _preparationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var saved = await _storage.ReadSettingsAsync();
+            var changed = !string.Equals(_settings.ModelPath, saved.ModelPath, StringComparison.OrdinalIgnoreCase);
+            var downloadChanged = _settings.DownloadModelFile != saved.DownloadModelFile;
+            if (changed && ReleaseModelAsync is not null) await ReleaseModelAsync();
+            _settings = _settings with { ModelPath = saved.ModelPath, DownloadModelFile = saved.DownloadModelFile };
+            var fileName = Path.GetFileName(saved.ModelPath);
+            if (changed || downloadChanged)
+                DownloadModelFile = ModelDownload.Catalog.Contains(saved.DownloadModelFile) ? saved.DownloadModelFile :
+                    ModelDownload.Catalog.Contains(fileName) ? fileName : ModelDownload.FileName;
+            RefreshModel(); RefreshInstalledModels(selectDefault: changed);
+            if (changed) SettingsChanged?.Invoke(_settings);
+        }
+        finally { PreparingModel = false; finished.TrySetResult(); }
+    }
+
+    public void RefreshMicrophones()
+    {
+        Microphones.Clear();
+        Microphones.Add(new(-1, UiText.Get("Micrófono predeterminado de Windows")));
+        for (var i = 0; i < WaveIn.DeviceCount; i++) Microphones.Add(new(i, WaveIn.GetCapabilities(i).ProductName));
+        var saved = !string.IsNullOrEmpty(_settings.MicrophoneName)
+            ? Microphones.FirstOrDefault(x => x.Index >= 0 && x.Name == _settings.MicrophoneName)
+            : Microphones.FirstOrDefault(x => x.Index == _settings.MicrophoneIndex);
+        if (saved is null && _settings.MicrophoneIndex != -1)
+        {
+            Microphones.Add(new(-2, _settings.MicrophoneName) { Name = UiText.Get("Micrófono no disponible: {0}", _settings.MicrophoneName) });
+            MicrophoneIndex = -2;
+        }
+        else MicrophoneIndex = saved?.Index ?? -1;
+        if (saved is not null && saved.Index != -1 && string.IsNullOrEmpty(_settings.MicrophoneName))
+            _settings = _settings with { MicrophoneName = saved.Name };
+    }
+
+    public int ResolveMicrophoneIndex()
+    {
+        if (_settings.MicrophoneIndex == -1) return -1;
+        if (_settings.MicrophoneIndex >= 0 && _settings.MicrophoneIndex < WaveIn.DeviceCount &&
+            WaveIn.GetCapabilities(_settings.MicrophoneIndex).ProductName == _settings.MicrophoneName) return _settings.MicrophoneIndex;
+        if (!string.IsNullOrEmpty(_settings.MicrophoneName))
+            for (var i = 0; i < WaveIn.DeviceCount; i++)
+                if (WaveIn.GetCapabilities(i).ProductName == _settings.MicrophoneName) return i;
+        throw new InvalidOperationException(UiText.Get("El micrófono seleccionado no está disponible. Elige uno en Ajustes."));
+    }
+
+    public void ReportCapture(AudioClip audio)
+    {
+        _lastCapture = (audio.Duration.TotalSeconds, audio.Peak, audio.WaveData.Length);
+        Raise(nameof(LastCaptureDetails));
     }
 
     private void RefreshModel()
     {
         ModelPath = _settings.ModelPath;
-        ModelName = ModelReady ? Path.GetFileName(_settings.ModelPath) : UiText.Get("Sin modelo");
+        ModelName = string.IsNullOrEmpty(_settings.ModelPath) ? UiText.Get("Sin modelo") : ModelDownload.DisplayName(_settings.ModelPath) +
+            (ModelReady ? "" : " · " + UiText.Get("Archivo no disponible"));
         Raise(nameof(ModelReady));
     }
 
@@ -342,7 +501,12 @@ public sealed class MainViewModel : Bindable, IDisposable
         _ => error.Message
     };
 
-    private void RefreshCommands() { DownloadModelCommand.Refresh(); ImportModelCommand.Refresh(); SaveSettingsCommand.Refresh(); }
+    private void RefreshCommands()
+    {
+        DownloadModelCommand.Refresh(); ImportModelCommand.Refresh(); SaveSettingsCommand.Refresh();
+        UseModelCommand.Refresh(); DeleteModelCommand.Refresh(); Raise(nameof(CanManageModels));
+        RefreshModelsCommand.Refresh();
+    }
     public async Task StopModelPreparationAsync()
     {
         _downloadCancellation?.Cancel(); _importCancellation?.Cancel();
@@ -360,6 +524,7 @@ public sealed class MainViewModel : Bindable, IDisposable
         // Update labels in place: replacing ItemsSource can write a null SelectedValue back into settings.
         foreach (var choices in new[] { Languages, Themes, AccelerationModes, DownloadModels })
             foreach (var choice in choices) choice.Label = UiText.TranslateDisplayed(choice.Label);
+        foreach (var model in InstalledModels) model.RefreshLabel();
         foreach (var choice in HotkeyChoices)
             choice.Label = HotkeyGesture.TryParse(choice.Value, out var gesture) ? gesture.DisplayName : UiText.Get("Personalizado…");
         var defaultMicrophone = Microphones.FirstOrDefault(x => x.Index == -1);
@@ -370,7 +535,7 @@ public sealed class MainViewModel : Bindable, IDisposable
         StateLabel = UiText.Get(HasLastText ? "Tu texto está listo" : "Listo cuando tú lo estés");
         Status = UiText.TranslateDisplayed(Status);
         RefreshModel(); FilterHistory();
-        foreach (var property in new[] { nameof(ActiveHotkey), nameof(HotkeyDisplay), nameof(CaptureButtonText), nameof(ShortcutError), nameof(LastRunDetails), nameof(TotalMinutes), nameof(TotalWords) }) Raise(property);
+        foreach (var property in new[] { nameof(ActiveHotkey), nameof(HotkeyDisplay), nameof(CaptureButtonText), nameof(ShortcutError), nameof(LastRunDetails), nameof(LastCaptureDetails), nameof(TotalMinutes), nameof(TotalWords) }) Raise(property);
     }
 
     public void Dispose() { UiText.Changed -= RefreshLanguage; _downloadCancellation?.Cancel(); _importCancellation?.Cancel(); _http.Dispose(); }

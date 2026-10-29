@@ -12,6 +12,7 @@ using Transcriptor.Core;
 
 namespace Transcriptor.App.Tests;
 
+[Collection("Windows UI")]
 public sealed class StartupTests
 {
     [Fact]
@@ -83,6 +84,11 @@ public sealed class StartupTests
                 Assert.Equal("vulkan", viewModel.Acceleration);
                 Assert.Contains(Descendants(accelerationPicker).OfType<TextBlock>(), text => text.Text == "GPU · Vulkan");
                 var downloadPicker = (ComboBox)window.FindName("DownloadModelPicker");
+                Assert.Equal(5, downloadPicker.Items.Count);
+                var installedPicker = (ComboBox)window.FindName("InstalledModelPicker");
+                Assert.Empty(installedPicker.Items);
+                Assert.False(((Button)window.FindName("DefaultModelButton")).IsEnabled);
+                Assert.False(((Button)window.FindName("DeleteModelButton")).IsEnabled);
                 downloadPicker.SelectedValue = ModelDownload.SmallFileName;
                 Assert.Equal(ModelDownload.SmallFileName, viewModel.DownloadModelFile);
                 Snapshot(window, "dark-settings", app);
@@ -222,6 +228,7 @@ public sealed class StartupTests
                 Assert.Equal("Senda — Dictado local", window.Title);
                 Assert.Equal("Ctrl + Shift + D", viewModel.Hotkey);
                 Assert.Equal(savedText, viewModel.LastText);
+                AssertTurboSelectionInRealView(window, app);
             }
             catch (Exception error) { failure = error; }
             finally
@@ -246,6 +253,52 @@ public sealed class StartupTests
             if (match is not null) return match;
         }
         return null;
+    }
+
+    private static void AssertTurboSelectionInRealView(MainWindow window, App app)
+    {
+        var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Senda-TurboView-" + Guid.NewGuid().ToString("N"));
+        var original = window.DataContext;
+        try
+        {
+            // Navigate before binding the initialized model; this harness does not run a Dispatcher loop.
+            ((RadioButton)window.FindName("SettingsNav")).IsChecked = true;
+            var models = System.IO.Path.Combine(directory, "models");
+            System.IO.Directory.CreateDirectory(models);
+            foreach (var name in new[] { ModelDownload.SmallFileName, ModelDownload.TurboFileName })
+            {
+                using var file = System.IO.File.Create(System.IO.Path.Combine(models, name));
+                file.Write(BitConverter.GetBytes(0x67676d6c)); file.SetLength(1_000_000);
+            }
+            var turbo = System.IO.Path.Combine(models, ModelDownload.TurboFileName);
+            // Initialize before binding; this does not start the real App startup, tray or microphone.
+            UiText.SetLanguage("es");
+            using var restarted = Task.Run(async () =>
+            {
+                var store = new LocalStorage(directory, bytes => bytes, bytes => bytes);
+                await store.WriteSettingsAsync(new() { ModelPath = turbo, DownloadModelFile = ModelDownload.TurboFileName, SaveHistory = false });
+                var viewModel = new MainViewModel(directory);
+                await viewModel.InitializeAsync();
+                return viewModel;
+            }).GetAwaiter().GetResult();
+            window.DataContext = restarted;
+            window.UpdateLayout();
+            var picker = (ComboBox)window.FindName("InstalledModelPicker");
+            Assert.Equal(2, picker.Items.Count);
+            Assert.Equal(turbo, Assert.IsType<InstalledModelChoice>(picker.SelectedItem).Path);
+            Assert.True(Assert.IsType<InstalledModelChoice>(picker.SelectedItem).IsDefault);
+            Assert.Equal("Whisper Large v3 Turbo · OpenAI", restarted.ModelName);
+            Assert.Equal(ModelDownload.TurboFileName, ((ComboBox)window.FindName("DownloadModelPicker")).SelectedValue);
+            Assert.False(((Button)window.FindName("DefaultModelButton")).IsEnabled);
+            ((ScrollViewer)window.FindName("PageScroll")).ScrollToVerticalOffset(350);
+            window.UpdateLayout();
+            Snapshot(window, "turbo-default-restarted", app);
+        }
+        finally
+        {
+            window.DataContext = original;
+            if (System.IO.Directory.Exists(directory)) System.IO.Directory.Delete(directory, true);
+        }
     }
 
     private static void Snapshot(Window window, string name, Application app, Color? background = null)
