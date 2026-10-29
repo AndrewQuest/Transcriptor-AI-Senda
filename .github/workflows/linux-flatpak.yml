@@ -72,9 +72,10 @@ jobs:
       - name: Build Flatpak without network access to the compiler sandbox
         run: |
           flatpak-builder --user --force-clean --disable-rofiles-fuse --state-dir=artifacts/flatpak-state --repo=artifacts/flatpak-repo artifacts/flatpak-build packaging/flatpak/io.github.AndrewQuest.Senda.json
-          flatpak build-bundle artifacts/flatpak-repo artifacts/Senda-0.3.0-alpha.1-Linux-x64.flatpak io.github.AndrewQuest.Senda
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("linux/Cargo.toml", "rb"))["package"]["version"])')
+          flatpak build-bundle artifacts/flatpak-repo "artifacts/Senda-$version-Linux-x64.flatpak" io.github.AndrewQuest.Senda
           cd artifacts
-          sha256sum Senda-0.3.0-alpha.1-Linux-x64.flatpak > Senda-Linux-SHA256SUMS.txt
+          sha256sum "Senda-$version-Linux-x64.flatpak" > Senda-Linux-SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

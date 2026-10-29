@@ -12,6 +12,7 @@ pub struct Settings {
     pub interface_language: String,
     pub language: String,
     pub model: String,
+    pub download_model: String,
     pub microphone: String,
     pub cpu_threads: usize,
     pub unload_minutes: usize,
@@ -26,6 +27,7 @@ impl Default for Settings {
             interface_language: "es".into(),
             language: "auto".into(),
             model: "ggml-base-q5_1.bin".into(),
+            download_model: "".into(),
             microphone: "".into(),
             cpu_threads: std::thread::available_parallelism()
                 .map(|n| (n.get() / 2).clamp(1, 4))
@@ -137,6 +139,29 @@ mod tests {
         let settings: Settings = serde_json::from_str("{\"language\":\"en\"}").unwrap();
         assert!(!settings.press_enter_after_paste);
         assert_eq!(settings.language, "en");
+    }
+    #[test]
+    fn legacy_model_survives_settings_roundtrip_without_enabling_enter() {
+        for model in [
+            "ggml-base-q5_1.bin",
+            "ggml-small-q5_1.bin",
+            "ggml-large-v3-turbo-q5_0.bin",
+        ] {
+            let legacy = format!(
+                r#"{{"model":"{model}","language":"es","microphone":"Existing microphone"}}"#
+            );
+            let mut settings: Settings = serde_json::from_str(&legacy).unwrap();
+            assert_eq!(settings.model, model);
+            assert!(settings.download_model.is_empty());
+            settings.download_model = "ggml-tiny-q5_1.bin".into();
+            for _ in 0..3 {
+                settings = serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+                assert_eq!(settings.model, model);
+                assert_eq!(settings.language, "es");
+                assert_eq!(settings.microphone, "Existing microphone");
+                assert!(!settings.press_enter_after_paste);
+            }
+        }
     }
     #[test]
     fn history_authentication_rejects_modified_content() {

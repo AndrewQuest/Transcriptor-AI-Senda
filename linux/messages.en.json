@@ -51,5 +51,9 @@
   "El escritorio no autorizó el inicio automático.": "The desktop did not authorize autostart.",
   "No se pudo guardar el historial cifrado.": "Encrypted history could not be saved.",
   "Borrar historial": "Clear history",
-  "La corrección se copia para pegarla manualmente; no reemplaza mensajes ya enviados.": "Corrections are copied for manual pasting; sent messages are not replaced."
+  "La corrección se copia para pegarla manualmente; no reemplaza mensajes ya enviados.": "Corrections are copied for manual pasting; sent messages are not replaced.",
+  "Archivo no disponible": "File unavailable",
+  "El catálogo permite volver a descargar modelos borrados. Medium y Turbo necesitan más memoria; en CPU pueden ser más lentos. Descargar un modelo lo establece como predeterminado. Cambiar solo este selector no cambia el modelo activo.": "Deleted models remain available in the catalog. Medium and Turbo need more memory and can be slower on CPU. Downloading a model sets it as default. Changing only this selector does not change the active model.",
+  "No se pudo borrar el modelo.": "Could not delete the model.",
+  "Modelo borrado.": "Model deleted."
 }

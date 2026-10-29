@@ -78,11 +78,14 @@ try
         if (command.Operation == "configure")
         {
             var next = command.Settings ?? new();
-            var model = command.Model is ModelDownload.FileName or ModelDownload.SmallFileName ? command.Model : ModelDownload.FileName;
+            var model = command.Model ?? ModelDownload.FileName;
+            if (!ModelDownload.Catalog.Contains(model))
+            { await ReplyAsync(command.Id, "error", error: "Unsupported model; configuration preserved."); continue; }
+            if (Path.GetFileName(settings.ModelPath) != model) await engine.UnloadAsync();
             settings = next with { ModelPath = Path.Combine(directory, "models", model), Acceleration = "cpu",
                 Language = next.Language is "es" or "en" ? next.Language : "auto", CpuThreads = Math.Clamp(next.CpuThreads, 1, Environment.ProcessorCount) };
             UiText.SetLanguage(settings.InterfaceLanguage);
-            await ReplyAsync(command.Id, "configured"); continue;
+            await ReplyAsync(command.Id, "configured", new { model }); continue;
         }
         if (command.Operation is not ("transcribe" or "download")) { await ReplyAsync(command.Id, "error", error: "Unknown operation."); continue; }
         activeCancellation?.Dispose(); activeCancellation = new();

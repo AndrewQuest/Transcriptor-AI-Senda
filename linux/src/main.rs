@@ -1,6 +1,7 @@
 mod audio;
 mod i18n;
 mod ipc;
+mod models;
 mod portals;
 mod storage;
 
@@ -47,6 +48,12 @@ struct Ui {
     interface: adw::ComboRow,
     language: adw::ComboRow,
     model: adw::ComboRow,
+    installed: adw::ComboRow,
+    installed_files: Rc<RefCell<Vec<String>>>,
+    use_model: gtk::Button,
+    delete_model: gtk::Button,
+    refresh_models: gtk::Button,
+    model_help: gtk::Label,
     microphone: adw::ComboRow,
     threads: adw::SpinRow,
     unload: adw::SpinRow,
@@ -84,6 +91,9 @@ impl Ui {
             (&self.quit, "Salir"),
             (&self.save, "Guardar ajustes"),
             (&self.download, "Descargar modelo"),
+            (&self.use_model, "Usar como predeterminado"),
+            (&self.delete_model, "Borrar modelo"),
+            (&self.refresh_models, "Actualizar lista"),
             (&self.shortcut, "Activar / configurar atajo"),
             (&self.keyboard, "Autorizar teclado"),
             (&self.clear, "Borrar historial"),
@@ -93,12 +103,19 @@ impl Ui {
         for (row, key) in [
             (&self.interface, "Idioma de la interfaz"),
             (&self.language, "Idioma"),
-            (&self.model, "Modelo"),
+            (&self.model, "Descargar otro modelo multilingüe"),
+            (&self.installed, "Modelos instalados"),
             (&self.microphone, "Micrófono"),
         ] {
             row.set_title(&tr(key));
         }
         self.threads.set_title(&tr("Hilos de CPU"));
+        self.installed.set_subtitle(&format!(
+            "{}: {}",
+            tr("Predeterminado"),
+            models::label(&state.settings.model)
+        ));
+        self.model_help.set_text(&tr("El catálogo permite volver a descargar modelos borrados. Medium y Turbo necesitan más memoria; en CPU pueden ser más lentos. Descargar un modelo lo establece como predeterminado. Cambiar solo este selector no cambia el modelo activo."));
         if let Some(model) = self
             .microphone
             .model()
@@ -160,11 +177,25 @@ impl Ui {
         for widget in [
             self.save.upcast_ref::<gtk::Widget>(),
             self.download.upcast_ref(),
+            self.use_model.upcast_ref(),
+            self.delete_model.upcast_ref(),
+            self.refresh_models.upcast_ref(),
             self.shortcut.upcast_ref(),
             self.keyboard.upcast_ref(),
         ] {
             widget.set_sensitive(!busy);
         }
+        let selected = self.selected_model();
+        let available = selected
+            .as_ref()
+            .is_some_and(|file| models::available(&storage::data_dir().join("models"), file));
+        let different = selected
+            .as_ref()
+            .is_some_and(|file| file != &state.settings.model);
+        self.use_model
+            .set_sensitive(!busy && available && different);
+        self.delete_model
+            .set_sensitive(!busy && available && different);
         self.cancel.set_sensitive(busy);
         self.level.set_fraction(if state.capture.is_some() {
             self.level.fraction()
@@ -176,6 +207,48 @@ impl Ui {
         let notice = gio::Notification::new("Senda");
         notice.set_body(Some(&i18n::text(Self::english(state), source)));
         self.app.send_notification(Some("dictation"), &notice);
+    }
+    fn selected_model(&self) -> Option<String> {
+        self.installed_files
+            .borrow()
+            .get(self.installed.selected() as usize)
+            .cloned()
+    }
+    fn update_models(&self, state: &State, select_default: bool) {
+        let selected = if select_default {
+            Some(state.settings.model.clone())
+        } else {
+            self.selected_model()
+        };
+        let directory = storage::data_dir().join("models");
+        let files = models::installed(&directory, &state.settings.model);
+        let labels: Vec<String> = files
+            .iter()
+            .map(|file| {
+                let mut label = models::label(file).to_string();
+                if file == &state.settings.model {
+                    label.push_str(&format!(
+                        " · {}",
+                        i18n::text(Self::english(state), "Predeterminado")
+                    ));
+                }
+                if !models::available(&directory, file) {
+                    label.push_str(&format!(
+                        " · {}",
+                        i18n::text(Self::english(state), "Archivo no disponible")
+                    ));
+                }
+                label
+            })
+            .collect();
+        let index = selected
+            .and_then(|name| files.iter().position(|file| *file == name))
+            .unwrap_or(0);
+        *self.installed_files.borrow_mut() = files;
+        self.installed.set_model(Some(&gtk::StringList::new(
+            &labels.iter().map(String::as_str).collect::<Vec<_>>(),
+        )));
+        self.installed.set_selected(index as u32);
     }
 }
 fn combo(values: &[&str]) -> adw::ComboRow {
@@ -495,8 +568,25 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
         "en" => 2,
         _ => 0,
     });
-    let model = combo(&["Whisper Base · q5_1", "Whisper Small · q5_1"]);
-    model.set_selected(u32::from(settings.model.contains("small")));
+    let model = combo(&models::CATALOG.map(|(_, label)| label));
+    let download_file = if settings.download_model.is_empty() {
+        &settings.model
+    } else {
+        &settings.download_model
+    };
+    model.set_selected(
+        models::CATALOG
+            .iter()
+            .position(|(file, _)| *file == download_file)
+            .unwrap_or(1) as u32,
+    );
+    let installed = combo(&[]);
+    installed.set_subtitle_lines(0);
+    let installed_files = Rc::new(RefCell::new(Vec::new()));
+    let use_model = gtk::Button::new();
+    let delete_model = gtk::Button::new();
+    let refresh_models = gtk::Button::new();
+    let model_help = note();
     let devices = audio::devices();
     let mut names = vec![i18n::text(
         settings.interface_language == "en",
@@ -534,7 +624,6 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
     for row in [
         interface.upcast_ref::<gtk::Widget>(),
         language.upcast_ref(),
-        model.upcast_ref(),
         microphone.upcast_ref(),
         threads.upcast_ref(),
         unload.upcast_ref(),
@@ -545,6 +634,16 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
         group.add(row);
     }
     preferences.add(&group);
+    let model_group = adw::PreferencesGroup::new();
+    model_group.add(&installed);
+    let model_actions = panel();
+    for button in [&use_model, &delete_model, &refresh_models] {
+        model_actions.append(button);
+    }
+    model_group.add(&model_actions);
+    model_group.add(&model);
+    model_group.add(&model_help);
+    preferences.add(&model_group);
     let actions = adw::PreferencesGroup::new();
     let action_box = panel();
     let save = gtk::Button::builder()
@@ -556,8 +655,7 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
     let enter_limit = note();
     let shortcut_help = note();
     for child in [
-        save.upcast_ref::<gtk::Widget>(),
-        download.upcast_ref(),
+        download.upcast_ref::<gtk::Widget>(),
         shortcut.upcast_ref(),
         keyboard.upcast_ref(),
         enter_limit.upcast_ref(),
@@ -567,8 +665,21 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
     }
     actions.add(&action_box);
     preferences.add(&actions);
+    let settings_page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    preferences.set_vexpand(true);
+    settings_page.append(&preferences);
+    let save_bar = gtk::Box::builder()
+        .halign(gtk::Align::End)
+        .margin_top(12)
+        .margin_bottom(12)
+        .margin_start(24)
+        .margin_end(24)
+        .build();
+    save_bar.append(&save);
+    settings_page.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    settings_page.append(&save_bar);
     pages
-        .add_titled(&preferences, Some("settings"), "Ajustes")
+        .add_titled(&settings_page, Some("settings"), "Ajustes")
         .set_icon_name(Some("emblem-system-symbolic"));
     let history_page = panel();
     let history_text = editor();
@@ -595,6 +706,12 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
         interface,
         language,
         model,
+        installed,
+        installed_files,
+        use_model,
+        delete_model,
+        refresh_models,
+        model_help,
         microphone,
         threads,
         unload,
@@ -612,6 +729,7 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
         enter_limit,
         shortcut_help,
     };
+    ui.update_models(&state.borrow(), true);
     ui.refresh(&state.borrow());
     ui.status(&state.borrow(), "Motor local preparado.");
     let s = state.clone();
@@ -753,12 +871,7 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
                 _ => "auto",
             }
             .into();
-            next.model = if u.model.selected() == 1 {
-                "ggml-small-q5_1.bin"
-            } else {
-                "ggml-base-q5_1.bin"
-            }
-            .into();
+            next.download_model = models::CATALOG[u.model.selected() as usize].0.into();
             next.cpu_threads = u.threads.value() as usize;
             next.unload_minutes = u.unload.value() as usize;
             next.press_enter_after_paste = u.enter.is_active();
@@ -783,6 +896,8 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
                 };
                 u.login.set_active(next.launch_at_login);
             }
+            // A model download/default change may complete while the portal is open.
+            next.model = s.borrow().settings.model.clone();
             if storage::save_settings(&next).is_ok() {
                 let mut state = s.borrow_mut();
                 state.settings = next;
@@ -791,6 +906,7 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
                     state.history.clear();
                 }
                 let _ = configure(&mut state);
+                u.update_models(&state, false);
                 u.refresh(&state);
                 u.status(&state, "Ajustes guardados.");
             } else {
@@ -800,13 +916,87 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
     });
     let s = state.clone();
     let u = ui.clone();
+    ui.installed.connect_selected_notify(move |_| {
+        let s = s.clone();
+        let u = u.clone();
+        glib::idle_add_local_once(move || u.refresh(&s.borrow()));
+    });
+    let s = state.clone();
+    let u = ui.clone();
+    ui.refresh_models.connect_clicked(move |_| {
+        u.update_models(&s.borrow(), false);
+        u.refresh(&s.borrow());
+    });
+    let s = state.clone();
+    let u = ui.clone();
+    ui.use_model.connect_clicked(move |_| {
+        let mut state = s.borrow_mut();
+        if state.capture.is_some() || state.active.is_some() {
+            return;
+        }
+        let Some(file) = u.selected_model() else {
+            return;
+        };
+        if !models::available(&storage::data_dir().join("models"), &file) {
+            return;
+        }
+        let mut next = state.settings.clone();
+        next.model = file;
+        if storage::save_settings(&next).is_err() {
+            u.status(&state, "No se pudieron guardar los ajustes.");
+            return;
+        }
+        state.settings = next;
+        let _ = configure(&mut state);
+        u.update_models(&state, true);
+        u.refresh(&state);
+        u.status(&state, "Modelo preparado.");
+    });
+    let s = state.clone();
+    let u = ui.clone();
+    ui.delete_model.connect_clicked(move |_| {
+        let Some(file) = u.selected_model() else {
+            return;
+        };
+        let english = Ui::english(&s.borrow());
+        let dialog = adw::MessageDialog::new(
+            Some(&u.window),
+            Some(&i18n::text(english, "Borrar modelo")),
+            Some(models::label(&file)),
+        );
+        dialog.add_response("cancel", &i18n::text(english, "Cancelar"));
+        dialog.add_response("delete", &i18n::text(english, "Borrar modelo"));
+        dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+        dialog.set_default_response(Some("cancel"));
+        dialog.set_close_response("cancel");
+        let s = s.clone();
+        let u = u.clone();
+        dialog.connect_response(None, move |_, response| {
+            if response != "delete" {
+                return;
+            }
+            let state = s.borrow();
+            if state.capture.is_some() || state.active.is_some() {
+                return;
+            }
+            match models::delete(
+                &storage::data_dir().join("models"),
+                &file,
+                &state.settings.model,
+            ) {
+                Ok(()) => u.status(&state, "Modelo borrado."),
+                Err(_) => u.status(&state, "No se pudo borrar el modelo."),
+            }
+            u.update_models(&state, true);
+            u.refresh(&state);
+        });
+        dialog.present();
+    });
+    let s = state.clone();
+    let u = ui.clone();
     ui.download.connect_clicked(move |_| {
         let mut state = s.borrow_mut();
-        let model = if u.model.selected() == 1 {
-            "ggml-small-q5_1.bin"
-        } else {
-            "ggml-base-q5_1.bin"
-        };
+        let model = models::CATALOG[u.model.selected() as usize].0;
         if let Some(worker) = state.worker.as_mut() {
             match worker.send("download", json!({"model":model}), vec![]) {
                 Ok(id) => {
@@ -947,13 +1137,16 @@ fn build(app: &adw::Application, background: bool) -> Result<()> {
                     if state.active.as_deref() == message["id"].as_str() {
                         state.active = None;
                         if !state.cancelled {
-                            if let Some(model) = message["data"]["model"].as_str().filter(|m| {
-                                ["ggml-base-q5_1.bin", "ggml-small-q5_1.bin"].contains(m)
-                            }) {
+                            if let Some(model) = message["data"]["model"]
+                                .as_str()
+                                .filter(|m| models::known(m))
+                            {
                                 state.settings.model = model.into();
+                                state.settings.download_model = model.into();
                                 storage::save_settings(&state.settings)?;
                                 configure(&mut state)?;
                             }
+                            u.update_models(&state, true);
                             u.status(&state, "Modelo preparado.");
                         }
                         u.refresh(&state);

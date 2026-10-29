@@ -31,8 +31,9 @@ if not args.flatpak and not args.worker:
     parser.error("Specify --worker or --flatpak.")
 if not args.protocol_only and (not args.model or not args.wave):
     parser.error("Inference requires --model and --wave.")
-if args.model and args.model.name not in ("ggml-base-q5_1.bin", "ggml-small-q5_1.bin"):
-    parser.error("Use the supported multilingual Base or Small quantization.")
+catalog = ("ggml-tiny-q5_1.bin", "ggml-base-q5_1.bin", "ggml-small-q5_1.bin", "ggml-medium-q5_0.bin", "ggml-large-v3-turbo-q5_0.bin")
+if args.model and args.model.name not in catalog:
+    parser.error("Use a supported multilingual Whisper quantization.")
 if args.protocol_only:
     pcm = bytes(16000)
 else:
@@ -82,6 +83,13 @@ def send(identifier, operation, data=None, payload=b""):
 
 try:
     assert receive()["kind"] == "ready"
+    for index, model in enumerate(catalog):
+        identifier = "catalog-" + str(index)
+        send(identifier, "configure", {"model": model})
+        reply = receive()
+        assert reply["id"] == identifier and reply["kind"] == "configured" and reply["data"]["model"] == model, reply
+    send("unsupported", "configure", {"model": "../unsupported.bin"})
+    assert receive()["kind"] == "error"
     send("configure", "configure", {"model": args.model.name if args.model else "ggml-base-q5_1.bin", "settings": {"language": args.language, "cpuThreads": 4, "acceleration": "cpu"}})
     assert receive()["kind"] == "configured"
     for sequence in range(20):

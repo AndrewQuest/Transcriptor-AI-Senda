@@ -12,7 +12,7 @@ Funciona con CPU, sin GPU dedicada. La aceleración Vulkan es opcional. El audio
 | --- | --- | --- |
 | **Windows 11 x64** | **0.2.3 · preliminar** | [Instalador EXE recomendado](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.3/Senda-Setup-0.2.3-win-x64.exe) · [Página de la versión](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/v0.2.3) |
 | Windows 11 x64, portable | 0.2.3 | [ZIP portable](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/download/v0.2.3/Senda-0.2.3-Windows-x64.zip) |
-| Linux x64 | 0.3.0-alpha.1 · experimental | [Flatpak y hashes](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/linux-v0.3.0-alpha.1) |
+| Linux x64 | 0.3.0-alpha.2 · experimental | [Flatpak y hashes](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/linux-v0.3.0-alpha.2) |
 | macOS | Pendiente | Todavía no hay paquete |
 
 Las versiones se numeran por plataforma: para Windows descarga **0.2.3**. En la página de cada versión, abre **Assets** y selecciona el archivo indicado; los ZIP **Source code** contienen el código fuente.

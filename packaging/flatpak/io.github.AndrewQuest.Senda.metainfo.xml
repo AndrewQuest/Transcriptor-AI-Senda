@@ -7,8 +7,8 @@
   <project_license>LicenseRef-proprietary</project_license>
   <description><p>Dictate locally with quantized multilingual Whisper models, optional encrypted text history and desktop-authorized shortcuts. Audio stays in memory.</p><p>This experimental Linux preview reports desktop integration limitations and keeps text available to copy when delivery cannot be verified.</p></description>
   <launchable type="desktop-id">io.github.AndrewQuest.Senda.desktop</launchable>
-  <url type="homepage">https://github.com/AndrewQuest/Transcriptor-AI-</url>
+  <url type="homepage">https://github.com/AndrewQuest/Transcriptor-AI-Senda</url>
   <developer id="io.github.AndrewQuest"><name>AndrewQuest</name></developer>
   <content_rating type="oars-1.1"/>
-  <releases><release version="0.3.0-alpha.1" date="2026-10-22" type="development"/></releases>
+  <releases><release version="0.3.0-alpha.2" date="2026-10-28" type="development"/><release version="0.3.0-alpha.1" date="2026-10-22" type="development"/></releases>
 </component>

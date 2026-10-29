@@ -1,6 +1,6 @@
 # Senda para Linux con Flatpak
 
-Versión experimental para Linux x64 con interfaz GTK4/libadwaita, transcripción local con CPU y modelos Whisper Base/Small multilingües. Incluye interfaz en español e inglés, selección de micrófono, cancelación e historial cifrado cuando el almacén del escritorio está disponible.
+Versión experimental para Linux x64 con interfaz GTK4/libadwaita, transcripción local con CPU y modelos Whisper Tiny, Base, Small, Medium y Large v3 Turbo multilingües. Incluye interfaz en español e inglés, selección de micrófono, cancelación e historial cifrado cuando el almacén del escritorio está disponible.
 
 El audio permanece en RAM, con un máximo de dos minutos por grabación. La aceleración GPU no está disponible en esta versión.
 
@@ -8,12 +8,12 @@ El audio permanece en RAM, con un máximo de dos minutos por grabación. La acel
 
 ## Instalar
 
-Descarga el bundle `.flatpak` y su archivo de hashes de [la versión Linux](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/linux-v0.3.0-alpha.1). Desde la carpeta de descarga:
+Descarga el bundle `.flatpak` y su archivo de hashes de [la versión Linux](https://github.com/AndrewQuest/Transcriptor-AI-Senda/releases/tag/linux-v0.3.0-alpha.2). Desde la carpeta de descarga:
 
 ```sh
 sha256sum -c Senda-Linux-SHA256SUMS.txt
 flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak --user install ./Senda-0.3.0-alpha.1-Linux-x64.flatpak
+flatpak --user install ./Senda-0.3.0-alpha.2-Linux-x64.flatpak
 flatpak run io.github.AndrewQuest.Senda
 ```
 
@@ -21,10 +21,16 @@ No necesitas instalar el SDK de .NET. La primera instalación del runtime y la d
 
 ## Primer dictado
 
-1. Abre Ajustes, elige el micrófono y descarga Base o Small.
+1. Abre Ajustes, elige el micrófono y descarga un modelo. Tiny, Base y Small consumen menos recursos; Medium y Turbo pueden tardar más en CPU.
 2. Activa el atajo y autorízalo en el diálogo del escritorio.
 3. Mantén el atajo para hablar y suéltalo para transcribir.
 4. Pulsa **Copiar** y pega el resultado en tu aplicación. Usa **Esc** para cancelar.
+
+## Modelos y ajustes
+
+Elige un modelo instalado y pulsa **Usar como predeterminado**. Esa elección se guarda inmediatamente y se conserva al reiniciar. El catálogo de descarga es independiente: cambiarlo no activa otro modelo. Para borrar el predeterminado, elige primero otro. Los modelos borrados siguen en el catálogo para descargarlos de nuevo.
+
+Pulsa **Guardar ajustes**, siempre visible al pie de Ajustes, para aplicar las demás preferencias. Al actualizar desde la alpha anterior se conservan Base/Small, la configuración y el historial cifrado.
 
 ## Permisos y límites
 
